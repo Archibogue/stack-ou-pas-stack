@@ -47,10 +47,12 @@ La V1.1 impose l’ordre obligatoire d’un tour :
 ```text
 stack-ou-pas-stack/
 ├── physique/
-│   ├── regles/
-│   ├── cartes/
-│   ├── impression/
-│   └── archives-v5/
+│   ├── initiation/
+│   │   ├── regles/
+│   │   ├── cartes/
+│   │   └── impression/
+│   └── historique/
+│       └── neon-stack-v5/
 ├── internet/
 │   ├── index.html
 │   └── v2/

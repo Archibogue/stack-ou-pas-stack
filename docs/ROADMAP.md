@@ -3,7 +3,7 @@
 ## Version physique
 
 - Régénérer les planches recto/verso définitives pour la variante quadratique.
-- Ajouter un PNG par carte dans `physique/impression/png/`.
+- Ajouter un PNG par carte dans `physique/initiation/impression/png/`.
 - Préparer une fiche de mise en place rapide pour élèves.
 - Préparer des mains pédagogiques prêtes à poser.
 

@@ -25,7 +25,7 @@ const { CARD_DEFINITIONS, DECK_COMPOSITION, createCard, buildDecks } = await imp
 const rules = await import('../public/assets/js/rules.js');
 
 function parseDeckMarkdown() {
-  const markdown = readFileSync(resolve(repoRoot, 'physique/cartes/CARD_SET_INITIATION_QUADRATIQUE.md'), 'utf8');
+  const markdown = readFileSync(resolve(repoRoot, 'physique/initiation/cartes/CARD_SET_INITIATION_QUADRATIQUE.md'), 'utf8');
   const expected = new Map();
   let type = null;
 
@@ -135,7 +135,7 @@ function assertRebootStopsActions() {
 }
 
 function assertRulesConstants() {
-  const markdown = readFileSync(resolve(repoRoot, 'physique/regles/REGLES_INITIATION_QUADRATIQUE.md'), 'utf8');
+  const markdown = readFileSync(resolve(repoRoot, 'physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md'), 'utf8');
   assert.match(markdown, /Mémoire de départ.+11 mémoire totale \/ 11 mémoire libre/);
   assert.equal(rules.START_MEMORY, 11);
   assert.equal(rules.WIN_SCORE, 11);
