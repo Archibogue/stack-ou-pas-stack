@@ -1,15 +1,31 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect } from './game-engine.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadLocalState } from './storage.js';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
 let apiAvailable = false;
 
+const PHASE_STEPS = [
+  { key: PHASES.UPDATE, label: 'Mise à jour' },
+  { key: PHASES.DRAW, label: 'Pioche' },
+  { key: PHASES.ACTION, label: 'Conception' }
+];
+
+const DEMO_SCENARIOS = [
+  ['depth_choice', '1. Choix profondeur'],
+  ['base_not_end', '2. Cas de base'],
+  ['strategic_memory', '3. Choix mémoire'],
+  ['repair_or_clean', '4. Nettoyer / réparer'],
+  ['ram', '5. Barrette RAM'],
+  ['stack_spike_break', '6. Stack Spike']
+];
+
 export async function initUI() {
   showHomeScreen();
   apiAvailable = await detectApi();
   setApiAvailability(apiAvailable);
+  if (app.classList.contains('home-screen')) showHomeScreen();
 }
 
 function createElement(tag, props = {}, children = []) {
@@ -27,21 +43,32 @@ function createElement(tag, props = {}, children = []) {
 
 function showHomeScreen() {
   app.innerHTML = '';
-  const header = createElement('div', { className: 'header' }, [
-    createElement('div', {}, [
+  app.className = 'app home-screen';
+
+  const header = createElement('div', { className: 'header home-header' }, [
+    createElement('div', { className: 'brand-block' }, [
+      createElement('span', { className: 'eyebrow', textContent: 'Initiation quadratique' }),
       createElement('h1', { textContent: 'Stack ou pas Stack — V2' }),
       createElement('p', { textContent: 'Nouvelle version web, maintenable et hébergeable sur serveur PHP/MySQL. Le jeu fonctionne aussi en hot-seat local si l’API n’est pas disponible.' })
     ]),
     createElement('div', { className: 'header-actions' }, [
-      createElement('button', { className: 'primary', onclick: () => promptNewGame() }, ['Nouvelle partie locale']),
-      createElement('button', { onclick: () => loadLocalGame() }, ['Charger sauvegarde']),
-      createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
       createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
       createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles complètes'])
     ])
   ]);
 
-  const serverActions = createElement('div', { className: 'panel panel-body' }, [
+  const startPanel = createElement('section', { className: 'panel panel-body start-panel' }, [
+    createElement('span', { className: 'eyebrow', textContent: 'Partie locale' }),
+    createElement('h2', { textContent: 'Lancer une table' }),
+    createElement('p', { textContent: 'Deux joueurs, un même écran, une partie complète sans serveur.' }),
+    createElement('div', { className: 'phase-actions' }, [
+      createElement('button', { className: 'primary', onclick: () => promptNewGame() }, ['Nouvelle partie locale']),
+      createElement('button', { onclick: () => loadLocalGame() }, ['Charger sauvegarde'])
+    ])
+  ]);
+
+  const serverActions = createElement('section', { className: `panel panel-body server-panel${apiAvailable ? ' online' : ' offline'}` }, [
+    createElement('span', { className: 'eyebrow', textContent: apiAvailable ? 'API disponible' : 'API absente' }),
     createElement('h2', { textContent: 'Partie serveur (optionnel)' }),
     createElement('p', { textContent: apiAvailable ? 'API détectée. Créez ou rejoignez une partie distante.' : 'Aucune API détectée sur ce serveur.' }),
     createElement('div', { className: 'phase-actions' }, [
@@ -50,20 +77,17 @@ function showHomeScreen() {
     ])
   ]);
 
-  const demoPanel = createElement('div', { className: 'panel panel-body' }, [
+  const demoPanel = createElement('section', { className: 'panel panel-body demo-panel' }, [
+    createElement('span', { className: 'eyebrow', textContent: 'Situations préparées' }),
     createElement('h2', { textContent: 'Mode démonstration' }),
     createElement('p', { textContent: 'Charger une situation pédagogique préparée, avec mains cohérentes et journal d’actions.' }),
-    createElement('div', { className: 'phase-actions' }, [
-      createElement('button', { onclick: () => loadDemo('depth_choice') }, ['1. Choix profondeur']),
-      createElement('button', { onclick: () => loadDemo('base_not_end') }, ['2. Cas de base']),
-      createElement('button', { onclick: () => loadDemo('strategic_memory') }, ['3. Choix mémoire']),
-      createElement('button', { onclick: () => loadDemo('repair_or_clean') }, ['4. Nettoyer / réparer']),
-      createElement('button', { onclick: () => loadDemo('ram') }, ['5. Barrette RAM']),
-      createElement('button', { onclick: () => loadDemo('stack_spike_break') }, ['6. Stack Spike'])
-    ])
+    createElement('div', { className: 'demo-grid' }, DEMO_SCENARIOS.map(([key, label]) => (
+      createElement('button', { onclick: () => loadDemo(key) }, [label])
+    )))
   ]);
 
-  const helpPanel = createElement('div', { className: 'panel panel-body help-box' }, [
+  const helpPanel = createElement('section', { className: 'panel panel-body quick-rules' }, [
+    createElement('span', { className: 'eyebrow', textContent: 'Rappel rapide' }),
     createElement('h2', { textContent: 'Rappel rapide' }),
     createElement('p', { textContent: 'Ordre de tour : mise à jour → pioche → conception → fin de tour. Les fonctions actives non cassées doivent être mises à jour pendant la phase de mise à jour.' }),
     createElement('ul', {}, [
@@ -74,7 +98,12 @@ function showHomeScreen() {
     ])
   ]);
 
-  app.append(header, serverActions, demoPanel, helpPanel);
+  app.append(header, createElement('div', { className: 'home-grid' }, [
+    startPanel,
+    serverActions,
+    demoPanel,
+    helpPanel
+  ]));
 }
 
 function promptNewGame() {
@@ -148,10 +177,14 @@ function renderGameScreen() {
   const state = getState();
   if (!state) return;
   app.innerHTML = '';
-  const header = createElement('div', { className: 'header' }, [
-    createElement('div', {}, [
+  app.className = `app game-screen phase-${phaseClass(state.phase)}`;
+  const currentPlayer = state.players[state.currentPlayerIndex];
+  const header = createElement('div', { className: 'header game-header' }, [
+    createElement('div', { className: 'brand-block' }, [
+      createElement('span', { className: 'eyebrow', textContent: `Tour ${state.turn}` }),
       createElement('h1', { textContent: 'Stack ou pas Stack — V2' }),
-      createElement('p', { textContent: `Tour ${state.turn} — ${state.winner !== null ? 'Partie terminée' : `Phase ${state.phase}`}` })
+      createElement('p', { textContent: state.winner !== null ? 'Partie terminée' : `Joueur actif : ${currentPlayer.name}` }),
+      renderPhaseRail(state)
     ]),
     createElement('div', { className: 'header-actions' }, [
       createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
@@ -162,7 +195,7 @@ function renderGameScreen() {
     ])
   ]);
 
-  const board = createElement('div', { className: 'grid-3' }, [
+  const board = createElement('div', { className: 'grid-3 game-board' }, [
     renderPlayerPanel(state.players[0]),
     renderCenterPanel(state),
     renderPlayerPanel(state.players[1])
@@ -174,22 +207,26 @@ function renderGameScreen() {
 function renderPlayerPanel(player) {
   const state = getState();
   const isActive = state.currentPlayerIndex === player.index && state.phase !== PHASES.GAME_OVER;
-  const panel = createElement('div', { className: `panel player-panel${isActive ? ' active' : ''}` }, [
+  const brokenCount = player.active.filter((fn) => fn.broken).length;
+  const tone = player.index === 0 ? 'cyan' : 'orange';
+  const panel = createElement('section', { className: `panel player-panel player-${tone}${isActive ? ' active' : ''}` }, [
     createElement('div', { className: 'panel-body' }, [
       createElement('div', { className: 'player-header' }, [
-        createElement('div', {}, [
+        createElement('div', { className: 'player-name' }, [
           createElement('h2', { className: 'player-title', textContent: player.name }),
           createElement('div', { className: 'chip', textContent: player.index === 0 ? 'Joueur Cyan' : 'Joueur Orange' })
         ]),
-        createElement('div', { className: 'chip', textContent: `Score ${player.score}` })
+        createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
       ]),
+      memoryMeter(player),
       createElement('div', { className: 'stats' }, [
-        stat('Mémoire libre', player.memFree),
-        stat('Mémoire totale', player.memTotal),
-        stat('Mémoire utilisée', getPlayerUsedMemory(player)),
-        stat('Main', player.hand.length)
+        stat('Libre', player.memFree),
+        stat('Totale', player.memTotal),
+        stat('Utilisée', getPlayerUsedMemory(player)),
+        stat('Main', player.hand.length),
+        stat('Cassées', brokenCount)
       ]),
-      createElement('div', {}, [
+      createElement('section', { className: 'play-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Piles' }),
         createElement('div', { className: 'pile-list' }, [
           pileInfo('Fonctions', player.functionsDeck.length),
@@ -207,17 +244,23 @@ function renderPlayerPanel(player) {
           }, ['Piocher Système'])
         ])
       ]),
-      createElement('div', {}, [
+      createElement('section', { className: 'play-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Fonctions actives' }),
-        createElement('div', { className: 'function-list' }, player.active.map((fn) => renderFunctionCard(player, fn)))
+        createElement('div', { className: 'function-list' }, player.active.length
+          ? player.active.map((fn) => renderFunctionCard(player, fn))
+          : [emptyState('Aucune fonction active')])
       ]),
-      createElement('div', {}, [
+      createElement('section', { className: 'play-area compact-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Hardware' }),
-        createElement('div', { className: 'chips' }, player.hardware.map((hw) => createElement('span', { className: 'chip', textContent: hw.name })))
+        createElement('div', { className: 'chips' }, player.hardware.length
+          ? player.hardware.map((hw) => createElement('span', { className: 'chip hardware-chip', textContent: hw.name }))
+          : [emptyState('Aucun hardware')])
       ]),
-      createElement('div', {}, [
+      createElement('section', { className: 'play-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Main' }),
-        createElement('div', { className: 'hand-cards' }, player.hand.map((card) => renderCard(player, card)))
+        createElement('div', { className: 'hand-cards' }, player.hand.length
+          ? player.hand.map((card, index) => renderCard(player, card, index))
+          : [emptyState('Main vide')])
       ])
     ])
   ]);
@@ -225,9 +268,23 @@ function renderPlayerPanel(player) {
 }
 
 function stat(label, value) {
-  return createElement('div', { className: 'stat' }, [
+  return createElement('div', { className: 'stat compact-stat' }, [
     createElement('span', { className: 'label', textContent: label }),
     createElement('span', { className: 'value', textContent: value })
+  ]);
+}
+
+function memoryMeter(player) {
+  const used = Math.max(0, player.memTotal - player.memFree);
+  const ratio = player.memTotal > 0 ? Math.min(100, Math.max(0, Math.round((used / player.memTotal) * 100))) : 0;
+  return createElement('div', { className: 'memory-meter', style: `--mem:${ratio}%` }, [
+    createElement('div', { className: 'memory-meter-head' }, [
+      createElement('span', { textContent: 'Occupation mémoire' }),
+      createElement('strong', { textContent: `${used}/${player.memTotal}` })
+    ]),
+    createElement('div', { className: 'memory-track' }, [
+      createElement('span', { className: 'memory-fill' })
+    ])
   ]);
 }
 
@@ -238,13 +295,31 @@ function pileInfo(title, count) {
 function renderFunctionCard(player, fn) {
   const state = getState();
   const isCurrent = state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
-  return createElement('div', { className: `function-item${fn.broken ? ' broken' : ''}` }, [
+  const modeClass = fn.broken ? 'broken' : fn.reachedZero ? 'unwinding' : 'stacking';
+  const nextEffect = getNextFunctionEffect(fn);
+  const effects = getFunctionEffectSummary(fn);
+  return createElement('div', { className: `function-item ${modeClass}${isCurrent ? ' actionable' : ''}` }, [
     createElement('div', { className: 'function-title' }, [
       createElement('h3', { textContent: fn.name }),
       createElement('span', { className: 'chip', textContent: fn.broken ? 'Cassée' : fn.reachedZero ? 'Dépilage' : 'Empilage' })
     ]),
     createElement('div', { className: 'function-meta', textContent: `R=${fn.R} — cadres ${fn.frames.length} — mémoire ${fn.memUsed}` }),
-    createElement('div', { className: 'frame-row' }, fn.frames.map((frame) => createElement('span', { className: `frame${frame === 'P' ? ' parasite' : ''}`, textContent: frame }))),
+    createElement('div', { className: 'frame-row' }, fn.frames.map((frame, index) => createElement('span', {
+      className: `frame${frame === 'P' ? ' parasite' : ''}`,
+      style: `--i:${index}`,
+      textContent: frame
+    }))),
+    createElement('div', { className: 'function-effects' }, [
+      createElement('div', { className: 'next-effect' }, [
+        createElement('span', { textContent: nextEffect.label }),
+        createElement('strong', { textContent: nextEffect.text })
+      ]),
+      createElement('div', { className: 'effect-list' }, [
+        effectLine('Cas de base', effects.base),
+        effectLine('Remontée', effects.up),
+        effectLine('Terminaison', effects.terminal)
+      ])
+    ]),
     createElement('div', { className: 'card-actions' }, [
       createElement('button', { className: 'good', onclick: () => applyUpdate(fn.id), disabled: !isCurrent }, ['Mettre à jour']),
       createElement('button', { onclick: () => applyOverclock(fn.id), disabled: !canUseOverclock(fn.id) }, ['Overclock'])
@@ -252,11 +327,15 @@ function renderFunctionCard(player, fn) {
   ]);
 }
 
-function renderCard(player, card) {
+function renderCard(player, card, index = 0) {
   const state = getState();
   const enabled = canPlayCard() && state.currentPlayerIndex === player.index;
+  const typeClass = cardTypeClass(card.type);
   const children = [
-    createElement('div', { className: 'meta', textContent: `${card.type} — coût ${card.cost}` }),
+    createElement('div', { className: 'card-top' }, [
+      createElement('span', { className: `type-badge ${typeClass}`, textContent: card.type }),
+      createElement('span', { className: 'cost-badge', textContent: `Coût ${card.cost}` })
+    ]),
     createElement('h3', { className: 'title', textContent: card.name }),
     card.type === 'Fonction'
       ? createElement('div', { className: 'card-rule', textContent: `${card.mode === 'fixe' ? 'Empiler' : 'Empiler jusqu’à'} ${card.maxR} — valeur ${card.value}` })
@@ -266,7 +345,7 @@ function renderCard(player, card) {
       createElement('button', { onclick: () => playCardAction(player.index, card.id), disabled: !enabled }, ['Jouer'])
     ])
   ];
-  return createElement('div', { className: `card ${card.type.toLowerCase()}` }, children);
+  return createElement('article', { className: `card ${typeClass}`, style: `--i:${index}` }, children);
 }
 
 function renderCenterPanel(state) {
@@ -301,26 +380,36 @@ function renderCenterPanel(state) {
     disabled: state.phase !== PHASES.ACTION || state.winner !== null || currentPlayer.rebootedThisTurn
   }, ['Reboot volontaire']));
 
-  const winnerBox = state.winner !== null ? createElement('div', { className: 'panel panel-body' }, [
+  const winnerBox = state.winner !== null ? createElement('div', { className: 'winner-banner' }, [
     createElement('h2', { textContent: 'Victoire !' }),
     createElement('p', { textContent: `${state.players[state.winner].name} remporte la partie.` })
   ]) : null;
 
-  return createElement('div', { className: 'panel panel-body phase-card' }, [
+  return createElement('section', { className: 'panel panel-body phase-card' }, [
     createElement('h2', { textContent: 'État du tour' }),
+    renderPhaseRail(state),
     createElement('div', { className: 'big', textContent: phaseText }),
-    createElement('div', { className: 'help-box', textContent: `Joueur actif : ${currentPlayer.name}` }),
+    createElement('div', { className: 'turn-owner', textContent: `Joueur actif : ${currentPlayer.name}` }),
     createElement('div', { className: 'phase-actions' }, buttons),
     winnerBox,
-    createElement('div', { className: 'log' }, [
-      createElement('h3', { textContent: 'Journal des actions' }),
-      createElement('div', { className: 'log-lines' }, state.log.map((entry) => createElement('div', { className: `log-line ${entry.cls}` }, [`[${entry.time}] ${entry.text}`])))
+    createElement('div', { className: 'log action-log' }, [
+      createElement('div', { className: 'log-head' }, [
+        createElement('h3', { textContent: 'Journal des actions' }),
+        createElement('span', { className: 'chip', textContent: `${state.log.length} entrée(s)` })
+      ]),
+      createElement('div', { className: 'log-lines' }, [...state.log].reverse().map((entry, index) => createElement('div', {
+        className: `log-line ${entry.cls}`,
+        style: `--i:${index}`
+      }, [
+        createElement('div', { className: 'log-meta', textContent: formatLogMeta(entry, index) }),
+        createElement('div', { className: 'log-text', textContent: entry.text })
+      ])))
     ])
   ]);
 }
 
 function renderHelpPanel() {
-  return createElement('div', { className: 'panel panel-body help-box' }, [
+  return createElement('aside', { className: 'rules-strip' }, [
     createElement('h2', { textContent: 'Aide et règles' }),
     createElement('p', { textContent: 'Ce jeu met en œuvre la variante d’initiation quadratique avec mémoire 11, victoire à 11, et overflow au 7e cadre.' }),
     createElement('ul', {}, [
@@ -330,6 +419,52 @@ function renderHelpPanel() {
       createElement('li', { textContent: 'Réparer remet la fonction en état selon le texte de la carte.' })
     ])
   ]);
+}
+
+function renderPhaseRail(state) {
+  return createElement('ol', { className: 'phase-rail' }, PHASE_STEPS.map((step, index) => {
+    const isActive = state.phase === step.key;
+    const isDone = PHASE_STEPS.findIndex((item) => item.key === state.phase) > index || state.phase === PHASES.GAME_OVER;
+    return createElement('li', { className: `${isActive ? 'active' : ''}${isDone ? ' done' : ''}`.trim() }, [
+      createElement('span', { textContent: String(index + 1) }),
+      createElement('strong', { textContent: step.label })
+    ]);
+  }));
+}
+
+function emptyState(label) {
+  return createElement('div', { className: 'empty-state', textContent: label });
+}
+
+function effectLine(label, text) {
+  return createElement('div', { className: 'effect-line' }, [
+    createElement('span', { textContent: label }),
+    createElement('strong', { textContent: text })
+  ]);
+}
+
+function formatLogMeta(entry, index) {
+  const order = entry.order ? `#${String(entry.order).padStart(2, '0')}` : `#${String(index + 1).padStart(2, '0')}`;
+  const turn = entry.turn ? `Tour ${entry.turn}` : 'Tour ?';
+  const player = entry.player || 'Système';
+  const phase = entry.phase || 'Phase ?';
+  return `${order} · ${turn} · ${player} · ${phase}`;
+}
+
+function cardTypeClass(type) {
+  if (type === 'Fonction') return 'function';
+  if (type === 'Commande') return 'command';
+  if (type === 'Interrupt') return 'interrupt';
+  if (type === 'Hardware') return 'hardware';
+  return 'system';
+}
+
+function phaseClass(phase) {
+  if (phase === PHASES.UPDATE) return 'update';
+  if (phase === PHASES.DRAW) return 'draw';
+  if (phase === PHASES.ACTION) return 'action';
+  if (phase === PHASES.GAME_OVER) return 'game-over';
+  return 'setup';
 }
 
 function drawPileButton(playerIndex, deckType) {

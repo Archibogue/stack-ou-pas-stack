@@ -44,6 +44,7 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     turn: 1,
     winner: null,
     log: [],
+    logSequence: 0,
     firstTurn: true,
     remoteCode: null,
     isRemote: false,
@@ -95,6 +96,8 @@ export function cloneStateForSave(state) {
 export function restoreState(data) {
   const state = cloneStateForSave(data);
   if (!state.phase) state.phase = PHASES.SETUP;
+  state.log = state.log || [];
+  state.logSequence = state.logSequence || state.log.length || 0;
   state.players?.forEach((player) => {
     player.updatedThisTurn = player.updatedThisTurn || [];
     player.planifierUsed = Boolean(player.planifierUsed);

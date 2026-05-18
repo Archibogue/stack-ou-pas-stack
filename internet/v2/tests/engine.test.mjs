@@ -90,6 +90,16 @@ function assertFunctionMemoryLifecycle() {
   assert.equal(engine.updateFunction(func.id), true);
   assert.equal(player.memFree, 7, 'Adding a recursive frame costs one memory');
   assert.equal(func.memUsed, 4);
+  assert.match(engine.getNextFunctionEffect(func).text, /empile \[0\]/);
+  assert.match(engine.getFunctionEffectSummary(func).base, /pioche 1 carte/);
+}
+
+function assertStructuredLog() {
+  const state = engine.newGame('Ada', 'Grace');
+  assert.equal('time' in state.log[0], false, 'Log entries should not rely on local clock time');
+  assert.equal(state.log[0].turn, 1);
+  assert.equal(state.log[0].player, 'Ada');
+  assert.ok(state.log[0].order < state.log[state.log.length - 1].order, 'Log is chronological');
 }
 
 function assertPlanifierAndHotfix() {
@@ -222,6 +232,7 @@ assertFunctionDescriptionsUseRulePhases();
 assertInitialSetup();
 assertDeckBuild();
 assertFunctionMemoryLifecycle();
+assertStructuredLog();
 assertPlanifierAndHotfix();
 assertRebootStopsActions();
 assertDemoScenarios();

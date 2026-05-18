@@ -97,6 +97,117 @@ export function getOpponentPlayer() {
   return gameState.players[1 - gameState.currentPlayerIndex];
 }
 
+export function getFunctionEffectSummary(func) {
+  const bonus = bonusRecursion(func.R);
+  const fallback = {
+    base: 'aucun effet particulier',
+    up: 'aucun effet particulier',
+    terminal: 'aucun effet particulier'
+  };
+  const summaries = {
+    factorielle: {
+      base: 'pioche 1 carte',
+      up: 'gagne 1 mémoire libre',
+      terminal: `gagne B(${func.R})=${bonus} mémoire libre`
+    },
+    tri_fusion: {
+      base: 'pioche 1 carte',
+      up: 'réordonne virtuellement les cartes du dessus',
+      terminal: `retire jusqu’à B(${func.R})=${bonus} parasite(s)`
+    },
+    recherche: {
+      base: 'révèle puis prend 1 carte',
+      up: 'retire 1 cadre parasite',
+      terminal: `pioche B(${func.R})+1=${bonus + 1} carte(s)`
+    },
+    sentinelle: {
+      base: 'regarde le dessus d’une pile',
+      up: 'gagne 1 mémoire libre',
+      terminal: `pioche B(${func.R})=${bonus} carte(s)`
+    },
+    glouton: {
+      base: 'pioche 1 carte',
+      up: 'l’adversaire perd 1 mémoire libre',
+      terminal: `ajoute B(${func.R})=${bonus} parasite(s) chez l’adversaire`
+    },
+    archiviste: {
+      base: 'regarde 2 cartes',
+      up: 'gagne 1 mémoire libre',
+      terminal: `pioche B(${func.R})=${bonus} carte(s), puis défausse 1 carte`
+    },
+    quicksort: {
+      base: 'pioche 1 carte',
+      up: 'l’adversaire perd 1 mémoire libre',
+      terminal: `l’adversaire perd B(${func.R})=${bonus} mémoire libre`
+    },
+    expansion: {
+      base: 'pioche 1 carte',
+      up: 'gagne 1 mémoire libre',
+      terminal: `gagne B(${func.R})=${bonus} mémoire libre`
+    },
+    compactage: {
+      base: 'gagne 1 mémoire libre',
+      up: 'gagne 1 mémoire libre',
+      terminal: `nettoie une fonction cassée${bonus >= 2 ? ' puis pioche 1 carte' : ''}`
+    }
+  };
+  return summaries[func.cardKey] || fallback;
+}
+
+export function getNextFunctionEffect(func) {
+  const effects = getFunctionEffectSummary(func);
+  const top = func.frames[func.frames.length - 1];
+  const bonus = bonusRecursion(func.R);
+
+  if (func.broken) {
+    return {
+      label: 'Cassée',
+      text: `Aucun effet tant que ${func.name} n’est pas réparée ou nettoyée. Elle occupe encore ${func.memUsed} mémoire.`
+    };
+  }
+
+  if (!func.reachedZero) {
+    if (func.frames.length >= MAX_FRAMES_PER_FUNCTION) {
+      return {
+        label: 'Overflow',
+        text: 'Prochaine mise à jour : tentative d’empiler un 7e cadre. La fonction cassera avant de progresser.'
+      };
+    }
+    return {
+      label: 'Empilage',
+      text: func.nextValue === 0
+        ? `Prochaine mise à jour : empile [0]. Le cas de base sera prêt ensuite : ${effects.base}.`
+        : `Prochaine mise à jour : empile [${func.nextValue}] et consomme 1 mémoire libre.`
+    };
+  }
+
+  if (top === 'P') {
+    return {
+      label: 'Parasite',
+      text: 'Prochaine mise à jour : dépile un cadre parasite, sans effet de carte.'
+    };
+  }
+
+  if (top === 0) {
+    return {
+      label: 'Cas de base',
+      text: `Prochaine mise à jour : dépile [0] et applique le cas de base : ${effects.base}.`
+    };
+  }
+
+  if (func.frames.length === 1) {
+    return {
+      label: 'Remontée + terminaison',
+      text: `Prochaine mise à jour : applique la remontée (${effects.up}), puis termine pour +${func.value}+B(${func.R})=${func.value + bonus} points et ${effects.terminal}.`
+    };
+  }
+
+  return {
+    label: 'Remontée',
+    text: `Prochaine mise à jour : dépile [${top}] et applique la remontée : ${effects.up}.`
+  };
+}
+
 function hasHardware(player, key) {
   return player.hardware.some((hardware) => hardware.key === key);
 }
@@ -159,7 +270,7 @@ export function drawForPlayer(deckType) {
     persistGameState();
     return null;
   }
-  logAction(gameState, `${player.name} pioche ${card.name}.`);
+  logAction(gameState, `${player.name} pioche dans la pile ${deckType === 'functions' ? 'Fonctions' : 'Système'} et reçoit ${card.name}.`);
   gameState.phase = PHASES.ACTION;
   persistGameState();
   return card;
@@ -267,21 +378,20 @@ function applyBaseEffect(player, func) {
     case 'glouton':
     case 'quicksort':
     case 'expansion':
-      drawBestCard(player, 1);
+      logAction(gameState, `${func.name} — cas de base : ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
       break;
     case 'compactage':
       releaseMemory(player, 1);
-      logAction(gameState, `${player.name} gagne 1 mémoire libre grâce à Compactage Mémoire.`, 'good');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, 'Recherche Dichotomique : révélé et pris 1 carte.', 'sys');
-      drawBestCard(player, 1);
+      logAction(gameState, `${func.name} — cas de base : révèle puis prend ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
       break;
     case 'sentinelle':
-      logAction(gameState, 'Routine Sentinelle : exploré le sommet d’une pile.', 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde le dessus d’une pile.`, 'sys');
       break;
     case 'archiviste':
-      logAction(gameState, 'Archiviste du Cache : regardé le dessus de la pile.', 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde 2 cartes.`, 'sys');
       break;
     default:
       break;
@@ -296,19 +406,19 @@ function applyUpEffect(player, func, value) {
     case 'expansion':
     case 'compactage':
       releaseMemory(player, 1);
-      logAction(gameState, `${player.name} gagne 1 mémoire libre en remontée de ${func.name}.`, 'good');
+      logAction(gameState, `${func.name} — remontée [${value}] : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'glouton':
     case 'quicksort':
       const opponent = getOpponentPlayer();
       loseMemory(opponent, 1);
-      logAction(gameState, `${opponent.name} perd 1 mémoire libre sous l’effet de ${func.name}.`, 'bad');
+      logAction(gameState, `${func.name} — remontée [${value}] : ${opponent.name} perd 1 mémoire libre.`, 'bad');
       break;
     case 'recherche':
       removeParasites(player, 1);
       break;
     case 'tri_fusion':
-      logAction(gameState, 'Tri Fusion Tempéré : réordonne virtuellement les cartes du dessus.', 'sys');
+      logAction(gameState, `${func.name} — remontée [${value}] : réordonne virtuellement les cartes du dessus.`, 'sys');
       break;
     default:
       break;
@@ -320,7 +430,7 @@ function completeFunction(player, func) {
   const gain = func.value + bonus;
   player.score += gain;
   player.completed.push({ key: func.cardKey, name: func.name });
-  logAction(gameState, `${player.name} termine ${func.name} (+${func.value} + B(${func.R})=${bonus}) → +${gain} points.`, 'good');
+  logAction(gameState, `${func.name} — terminaison : ${player.name} marque ${func.value} + B(${func.R})=${bonus}, soit +${gain} points.`, 'good');
   removeActiveFunction(player, func.id);
   discardFunction(player, func);
   applyTerminalEffect(player, func, bonus);
@@ -335,40 +445,58 @@ function applyTerminalEffect(player, func, bonus) {
     case 'factorielle':
     case 'expansion':
       releaseMemory(player, bonus);
-      logAction(gameState, `${player.name} gagne ${bonus} mémoire libre au terme de ${func.name}.`, 'good');
+      logAction(gameState, `${func.name} — effet de terminaison : ${player.name} gagne ${bonus} mémoire libre.`, 'good');
       break;
     case 'sentinelle':
-      drawBestCard(player, bonus);
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus))}.`, 'good');
       break;
     case 'glouton':
       addParasitesToPlayer(opponent, bonus);
       break;
     case 'quicksort':
       loseMemory(opponent, bonus);
-      logAction(gameState, `${opponent.name} perd ${bonus} mémoire libre sous l’effet de ${func.name}.`, 'bad');
+      logAction(gameState, `${func.name} — effet de terminaison : ${opponent.name} perd ${bonus} mémoire libre.`, 'bad');
       break;
     case 'archiviste':
-      drawBestCard(player, bonus);
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus))}.`, 'good');
       if (player.hand.length > 0) discardCardFromHand(player, player.hand[0].id, true);
+      logAction(gameState, `${func.name} — effet de terminaison : ${player.name} défausse 1 carte après la pioche.`, 'sys');
       break;
     case 'tri_fusion':
       removeParasites(player, bonus);
       break;
     case 'compactage':
       cleanBrokenFunction(player);
-      if (bonus >= 2) drawBestCard(player, 1);
+      if (bonus >= 2) logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
       break;
     case 'recherche':
-      drawBestCard(player, bonus + 1);
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus + 1))}.`, 'good');
       break;
     default:
       break;
   }
 }
 
-export function logAction(state, text, cls = '') {
-  state.log.unshift({ text, cls, time: new Date().toLocaleTimeString() });
-  if (state.log.length > 200) state.log.pop();
+export function logAction(state, text, cls = '', context = {}) {
+  state.logSequence = (state.logSequence || 0) + 1;
+  const player = context.player || state.players?.[state.currentPlayerIndex]?.name || 'Système';
+  state.log.push({
+    text,
+    cls,
+    order: state.logSequence,
+    turn: state.turn,
+    player,
+    phase: context.phase || formatPhaseForLog(state.phase)
+  });
+  if (state.log.length > 200) state.log.shift();
+}
+
+function formatPhaseForLog(phase) {
+  if (phase === PHASES.UPDATE) return 'Mise à jour';
+  if (phase === PHASES.DRAW) return 'Pioche';
+  if (phase === PHASES.ACTION) return 'Conception';
+  if (phase === PHASES.GAME_OVER) return 'Fin de partie';
+  return 'Mise en place';
 }
 
 function removeActiveFunction(player, functionId) {
@@ -376,13 +504,22 @@ function removeActiveFunction(player, functionId) {
 }
 
 function drawBestCard(player, count) {
+  const drawn = [];
   for (let i = 0; i < count; i += 1) {
     if (player.functionsDeck.length >= player.systemDeck.length && player.functionsDeck.length > 0) {
-      drawFromDeck(player, 'functions');
+      drawn.push(drawFromDeck(player, 'functions'));
     } else if (player.systemDeck.length > 0) {
-      drawFromDeck(player, 'system');
+      drawn.push(drawFromDeck(player, 'system'));
     }
   }
+  return drawn.filter(Boolean);
+}
+
+function formatDrawnCards(cards) {
+  if (cards.length === 0) return 'aucune carte piochée';
+  const shown = cards.slice(0, 3).map((card) => card.name).join(', ');
+  const suffix = cards.length > 3 ? `, +${cards.length - 3} autre(s)` : '';
+  return `${cards.length} carte(s) piochée(s) : ${shown}${suffix}`;
 }
 
 function removeCardFromHand(player, cardId) {
@@ -608,6 +745,7 @@ function playSystemCard(player, card, targetData) {
     return false;
   }
   let resolved = true;
+  logAction(gameState, `${player.name} joue ${card.name} : début de résolution.`, 'sys');
   switch (card.key) {
     case 'hotfix':
       resolved = repairFunction(player, targetData.functionId);
@@ -641,9 +779,12 @@ function playSystemCard(player, card, targetData) {
       logAction(gameState, `${card.name} est joué, effet enregistré.`, 'sys');
       break;
   }
-  if (!resolved) return false;
+  if (!resolved) {
+    logAction(gameState, `${card.name} n’est pas résolue : aucune carte n’est défaussée.`, 'warn');
+    return false;
+  }
   discardCardFromHand(player, card.id, true);
-  logAction(gameState, `${player.name} joue ${card.name}.`, 'sys');
+  logAction(gameState, `${card.name} est résolue et rejoint la défausse.`, 'sys');
   return true;
 }
 
