@@ -32,6 +32,10 @@ Le fichier fonctionne sans serveur et sans installation.
 - sauvegarde locale dans le navigateur ;
 - export/import JSON d’une partie.
 
-## Limites
+## Licence
 
-Cette version n’est pas encore un vrai multijoueur distant. Pour cela, il faudra ajouter un serveur ou une synchronisation externe.
+Le code de la version internet est distribué sous licence **MIT**.
+
+Les contenus de jeu affichés par l'interface restent couverts par la licence du projet : **CC BY-NC-SA 4.0** pour les règles, cartes et documents pédagogiques.
+
+Voir [`../LICENSE.md`](../LICENSE.md).

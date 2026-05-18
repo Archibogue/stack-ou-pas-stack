@@ -69,8 +69,22 @@ stack-ou-pas-stack/
 │   └── ROADMAP.md
 ├── README.md
 ├── CHANGELOG.md
+├── NOTICE.md
 └── LICENSE.md
 ```
+
+## Licence
+
+Le dépôt utilise une licence en deux volets :
+
+- code source : **MIT** ;
+- règles, cartes, documents pédagogiques et kits d'impression : **Creative Commons BY-NC-SA 4.0**.
+
+Cette licence permet le partage gratuit, l'impression et l'adaptation des contenus de jeu, avec attribution, sans usage commercial, et avec repartage sous les mêmes conditions.
+
+Voir [`LICENSE.md`](LICENSE.md).
+
+Attribution prête à réutiliser : [`NOTICE.md`](NOTICE.md).
 
 ## Commandes Git utiles
 

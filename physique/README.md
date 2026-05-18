@@ -28,3 +28,11 @@ La version physique active du projet est **Stack ou pas Stack — initiation qua
 - decks symétriques de 26 cartes.
 
 Les fichiers hérités de Neon Stack V5 sont rangés dans [`historique/neon-stack-v5/`](historique/neon-stack-v5/) pour ne pas mélanger la version jouable actuelle avec les archives.
+
+## Licence
+
+Les règles, cartes, documents pédagogiques, exports PNG, PDF et kits d'impression de cette section sont distribués sous licence **Creative Commons BY-NC-SA 4.0**.
+
+Le partage gratuit, l'impression et l'adaptation sont autorisés avec attribution, sans usage commercial, et avec repartage sous la même licence.
+
+Voir [`../LICENSE.md`](../LICENSE.md).

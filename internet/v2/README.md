@@ -66,3 +66,11 @@ Pour forcer une base dédiée hors WordPress, copier `internet/v2/public/api/con
 - Sauvegarder et recharger en local.
 - Exporter et importer une partie JSON.
 - Si l’API est disponible : créer une partie serveur, enregistrer et charger une partie distante.
+
+## Licence
+
+Le code de la V2 est distribué sous licence **MIT**.
+
+Les textes de règles, cartes et contenus pédagogiques affichés ou repris par la V2 restent distribués sous licence **Creative Commons BY-NC-SA 4.0**.
+
+Voir [`../../LICENSE.md`](../../LICENSE.md).
