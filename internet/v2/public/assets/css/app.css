@@ -561,6 +561,40 @@ p {
   --card-accent: var(--yellow);
 }
 
+.card.hidden-card {
+  --card-accent: var(--blue);
+  overflow: hidden;
+  min-height: 132px;
+  border-color: rgba(122, 162, 247, 0.34);
+  background:
+    linear-gradient(135deg, rgba(78, 205, 196, 0.18), transparent 44%),
+    linear-gradient(225deg, rgba(244, 162, 89, 0.18), transparent 46%),
+    #20251f;
+  color: var(--ink);
+}
+
+.hidden-card-pattern {
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: calc(var(--radius) - 2px);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 14px 14px;
+  opacity: 0.42;
+}
+
+.card.hidden-card .title,
+.card.hidden-card .desc {
+  position: relative;
+  color: var(--ink);
+}
+
+.card.hidden-card .desc {
+  color: var(--muted);
+}
+
 .card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 26px rgba(0, 0, 0, 0.24);

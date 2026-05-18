@@ -1,6 +1,7 @@
 import { cloneStateForSave } from './game-state.js';
 
 const STORAGE_KEY = 'stack-ou-pas-stack-v2-state';
+const REMOTE_SEAT_PREFIX = 'stack-ou-pas-stack-v2-seat-';
 const API_BASE = './api/games.php';
 
 export function saveLocalState(state) {
@@ -94,4 +95,18 @@ export async function loadRemoteGame(code) {
   } catch (error) {
     return null;
   }
+}
+
+export function saveRemoteSeat(code, seat) {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode || ![0, 1].includes(seat)) return;
+  window.sessionStorage.setItem(`${REMOTE_SEAT_PREFIX}${normalizedCode}`, String(seat));
+}
+
+export function loadRemoteSeat(code) {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return null;
+  const value = window.sessionStorage.getItem(`${REMOTE_SEAT_PREFIX}${normalizedCode}`);
+  const seat = Number(value);
+  return [0, 1].includes(seat) ? seat : null;
 }

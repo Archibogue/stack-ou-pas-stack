@@ -1,10 +1,14 @@
 import { PHASES } from './rules.js';
 import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
-import { detectApi, createRemoteGame, joinRemoteGame, loadLocalState } from './storage.js';
+import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
 let apiAvailable = false;
+let remotePollTimer = null;
+let remotePollInFlight = false;
+let lastRemoteSignature = '';
+let remotePollPausedUntil = 0;
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -77,7 +81,130 @@ function createElement(tag, props = {}, children = []) {
   return element;
 }
 
+function remoteCodeFor(state = getState()) {
+  return String(state?.remoteCode || '').trim().toUpperCase();
+}
+
+function isRemoteState(state = getState()) {
+  return Boolean(state?.isRemote && remoteCodeFor(state));
+}
+
+function getRemoteSeat(state = getState()) {
+  if (!isRemoteState(state)) return null;
+  return loadRemoteSeat(remoteCodeFor(state));
+}
+
+function canControlPlayer(playerIndex) {
+  const state = getState();
+  if (!isRemoteState(state)) return true;
+  return getRemoteSeat(state) === playerIndex;
+}
+
+function canViewPlayerHand(playerIndex) {
+  return canControlPlayer(playerIndex);
+}
+
+function canControlCurrentTurn(state = getState()) {
+  if (!isRemoteState(state)) return true;
+  return getRemoteSeat(state) === state.currentPlayerIndex;
+}
+
+function remoteSeatText(state = getState()) {
+  if (!isRemoteState(state)) return '';
+  const seat = getRemoteSeat(state);
+  if (seat === null) return 'Mode spectateur';
+  const player = state.players[seat];
+  return `Vous jouez : ${player?.name || `Joueur ${seat + 1}`}`;
+}
+
+function remoteTurnHint(state = getState()) {
+  if (!isRemoteState(state)) return `Joueur actif : ${state.players[state.currentPlayerIndex].name}`;
+  const seat = getRemoteSeat(state);
+  const active = state.players[state.currentPlayerIndex];
+  if (seat === null) return `Spectateur : tour de ${active.name}`;
+  if (seat === state.currentPlayerIndex) return `A vous de jouer : ${active.name}`;
+  return `En attente de ${active.name}`;
+}
+
+function remoteSignature(state) {
+  if (!state) return '';
+  return JSON.stringify({
+    turn: state.turn,
+    currentPlayerIndex: state.currentPlayerIndex,
+    phase: state.phase,
+    winner: state.winner,
+    logSequence: state.logSequence || 0,
+    players: state.players.map((player) => ({
+      score: player.score,
+      memFree: player.memFree,
+      memTotal: player.memTotal,
+      tempMemory: player.tempMemory,
+      rebootedThisTurn: player.rebootedThisTurn,
+      completedThisTurn: player.completedThisTurn,
+      updatedThisTurn: player.updatedThisTurn,
+      active: player.active,
+      hardware: player.hardware,
+      hand: player.hand.map((card) => card.id),
+      discard: player.discard.length,
+      functionsDeck: player.functionsDeck.length,
+      systemDeck: player.systemDeck.length
+    }))
+  });
+}
+
+function noteRemoteLocalAction(changed = true) {
+  if (!changed) return;
+  const state = getState();
+  if (!isRemoteState(state)) return;
+  remotePollPausedUntil = Date.now() + 2200;
+  lastRemoteSignature = remoteSignature(state);
+}
+
+function startRemotePollingIfNeeded() {
+  stopRemotePolling();
+  const state = getState();
+  if (!isRemoteState(state)) return;
+  lastRemoteSignature = remoteSignature(state);
+  remotePollTimer = window.setInterval(() => {
+    pollRemoteGame();
+  }, 2200);
+  pollRemoteGame();
+}
+
+function stopRemotePolling() {
+  if (remotePollTimer) window.clearInterval(remotePollTimer);
+  remotePollTimer = null;
+  remotePollInFlight = false;
+}
+
+async function pollRemoteGame() {
+  const state = getState();
+  const code = remoteCodeFor(state);
+  if (!isRemoteState(state) || remotePollInFlight || Date.now() < remotePollPausedUntil) return;
+  remotePollInFlight = true;
+  try {
+    const response = await loadRemoteGame(code);
+    const current = getState();
+    if (!response?.state || !isRemoteState(current) || remoteCodeFor(current) !== code) return;
+    const incoming = response.state;
+    const incomingSignature = remoteSignature(incoming);
+    const currentSequence = current.logSequence || 0;
+    const incomingSequence = incoming.logSequence || 0;
+    if (incomingSignature === lastRemoteSignature || incomingSequence < currentSequence) return;
+    const seat = getRemoteSeat(current);
+    loadGame(incoming);
+    setRemoteCode(code);
+    if (seat !== null) saveRemoteSeat(code, seat);
+    lastRemoteSignature = remoteSignature(getState());
+    renderGameScreen();
+    spawnArcadeEffect('draw', 'SYNC');
+  } finally {
+    remotePollInFlight = false;
+  }
+}
+
 function showHomeScreen() {
+  stopRemotePolling();
   app.innerHTML = '';
   app.className = 'app home-screen';
 
@@ -145,6 +272,7 @@ function showHomeScreen() {
 }
 
 function promptNewGame() {
+  stopRemotePolling();
   const name1 = prompt('Nom du joueur 1 ?', 'Joueur Cyan')?.trim() || 'Joueur Cyan';
   const name2 = prompt('Nom du joueur 2 ?', 'Joueur Orange')?.trim() || 'Joueur Orange';
   newGame(name1, name2);
@@ -159,6 +287,7 @@ function loadLocalGame() {
   }
   loadGame(saved);
   renderGameScreen();
+  startRemotePollingIfNeeded();
 }
 
 function exportGameJson() {
@@ -172,6 +301,7 @@ function importGameJson() {
   const success = importGame(json);
   if (success) {
     renderGameScreen();
+    startRemotePollingIfNeeded();
   } else {
     alert('JSON invalide ou partie incompatible.');
   }
@@ -184,9 +314,11 @@ async function createServerGame() {
   const response = await createRemoteGame(state);
   if (response?.code) {
     setRemoteCode(response.code);
+    saveRemoteSeat(response.code, 0);
     persistGameState();
     alert(`Partie créée. Code : ${response.code}`);
     renderGameScreen();
+    startRemotePollingIfNeeded();
   } else {
     alert('Échec de la création de la partie serveur.');
   }
@@ -199,14 +331,17 @@ async function joinServerGame() {
   if (response?.state) {
     loadGame(response.state);
     setRemoteCode(code);
+    saveRemoteSeat(code, 1);
     persistGameState();
     renderGameScreen();
+    startRemotePollingIfNeeded();
   } else {
     alert('Impossible de charger la partie.');
   }
 }
 
 function loadDemo(name) {
+  stopRemotePolling();
   loadDemoScenario(name);
   renderGameScreen();
   spawnArcadeEffect('deploy', 'DEMO');
@@ -221,19 +356,25 @@ function undoAction() {
 function renderGameScreen() {
   const state = getState();
   if (!state) return;
+  if (isRemoteState(state)) lastRemoteSignature = remoteSignature(state);
   app.innerHTML = '';
   app.className = `app game-screen phase-${phaseClass(state.phase)}`;
   const currentPlayer = state.players[state.currentPlayerIndex];
+  const remoteInfo = remoteSeatText(state);
+  const headerStatus = state.winner !== null
+    ? 'Partie terminee'
+    : `Joueur actif : ${currentPlayer.name}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
   const header = createElement('div', { className: 'header game-header' }, [
     createElement('div', { className: 'brand-block' }, [
       createElement('span', { className: 'eyebrow', textContent: `Tour ${state.turn}` }),
       createElement('h1', { textContent: 'Stack ou pas Stack — V2' }),
-      createElement('p', { textContent: state.winner !== null ? 'Partie terminée' : `Joueur actif : ${currentPlayer.name}` }),
+      createElement('p', { textContent: headerStatus }),
       renderPhaseRail(state)
     ]),
     createElement('div', { className: 'header-actions' }, [
       createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
-      createElement('button', { className: 'undo-button', onclick: () => undoAction(), disabled: !canUndo() }, ['Undo']),
+      isRemoteState(state) ? createElement('button', { onclick: () => pollRemoteGame(), disabled: remotePollInFlight }, ['Synchroniser']) : null,
+      createElement('button', { className: 'undo-button', onclick: () => undoAction(), disabled: isRemoteState(state) || !canUndo() }, ['Undo']),
       createElement('button', { onclick: () => saveGame() }, ['Sauvegarder local']),
       createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
       createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
@@ -255,6 +396,7 @@ function renderPlayerPanel(player) {
   const isActive = state.currentPlayerIndex === player.index && state.phase !== PHASES.GAME_OVER;
   const brokenCount = player.active.filter((fn) => fn.broken).length;
   const tone = player.index === 0 ? 'cyan' : 'orange';
+  const canSeeHand = canViewPlayerHand(player.index);
   const panel = createElement('section', { className: `panel player-panel player-${tone}${isActive ? ' active' : ''}` }, [
     createElement('div', { className: 'panel-body' }, [
       createElement('div', { className: 'player-header' }, [
@@ -282,7 +424,7 @@ function renderPlayerPanel(player) {
         createElement('div', { className: 'phase-actions' }, [
           createElement('button', {
             onclick: () => { drawPileButton(player.index, 'system'); },
-            disabled: !(state.phase === PHASES.DRAW && state.currentPlayerIndex === player.index && state.winner === null)
+            disabled: !(state.phase === PHASES.DRAW && state.currentPlayerIndex === player.index && state.winner === null && canControlPlayer(player.index))
           }, ['Piocher Système'])
         ])
       ]),
@@ -299,9 +441,11 @@ function renderPlayerPanel(player) {
           : [emptyState('Aucun hardware')])
       ]),
       createElement('section', { className: 'play-area' }, [
-        createElement('h3', { className: 'area-title', textContent: 'Main' }),
+        createElement('h3', { className: 'area-title', textContent: canSeeHand ? 'Main' : 'Main adverse' }),
         createElement('div', { className: 'hand-cards' }, player.hand.length
-          ? player.hand.map((card, index) => renderCard(player, card, index))
+          ? canSeeHand
+            ? player.hand.map((card, index) => renderCard(player, card, index))
+            : renderHiddenHand(player)
           : [emptyState('Main vide')])
       ])
     ])
@@ -336,7 +480,7 @@ function pileInfo(title, count) {
 
 function renderFunctionCard(player, fn) {
   const state = getState();
-  const isCurrent = state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const isCurrent = canControlPlayer(player.index) && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
   const modeClass = fn.broken ? 'broken' : fn.reachedZero ? 'unwinding' : 'stacking';
   const nextEffect = getNextFunctionEffect(fn);
   const effects = getFunctionEffectSummary(fn);
@@ -364,7 +508,7 @@ function renderFunctionCard(player, fn) {
     ]),
     createElement('div', { className: 'card-actions' }, [
       createElement('button', { className: 'good', onclick: () => applyUpdate(fn.id), disabled: !isCurrent }, ['Mettre à jour']),
-      createElement('button', { onclick: () => applyOverclock(fn.id), disabled: !canUseOverclock(fn.id) }, ['Overclock'])
+      createElement('button', { onclick: () => applyOverclock(fn.id), disabled: !canControlPlayer(player.index) || !canUseOverclock(fn.id) }, ['Overclock'])
     ])
   ]);
 }
@@ -391,7 +535,20 @@ function renderCard(player, card, index = 0) {
   return createElement('article', { className: `card ${typeClass}`, style: `--i:${index}` }, children);
 }
 
+function renderHiddenHand(player) {
+  return player.hand.map((card, index) => renderHiddenCard(index));
+}
+
+function renderHiddenCard(index = 0) {
+  return createElement('article', { className: 'card hidden-card', style: `--i:${index}` }, [
+    createElement('div', { className: 'hidden-card-pattern' }),
+    createElement('h3', { className: 'title', textContent: 'Carte cachee' }),
+    createElement('div', { className: 'desc', textContent: 'La main adverse reste masquee en partie distante.' })
+  ]);
+}
+
 function canUseCardFromHand(player, card) {
+  if (!canControlPlayer(player.index)) return false;
   if (!canPlayCard(player.index, card.id)) return false;
   const targetChoices = getTargetChoices(player.index, card);
   return targetChoices === null || targetChoices.length > 0;
@@ -399,6 +556,7 @@ function canUseCardFromHand(player, card) {
 
 function renderCenterPanel(state) {
   const currentPlayer = getState().players[state.currentPlayerIndex];
+  const canUseTurnControls = canControlCurrentTurn(state);
   const pendingUpdates = currentPlayer.active.filter((fn) => !fn.broken && !currentPlayer.updatedThisTurn.includes(fn.id)).length;
   const phaseText = state.phase === PHASES.UPDATE
     ? pendingUpdates > 0 ? `Phase de mise à jour : ${pendingUpdates} fonction(s) restantes` : 'Mise à jour terminée'
@@ -410,39 +568,43 @@ function renderCenterPanel(state) {
     className: 'primary',
     onclick: () => {
       const changed = validateUpdatePhase();
+      noteRemoteLocalAction(changed);
       renderGameScreen();
       if (changed) spawnArcadeEffect('draw', 'NEXT');
     },
-    disabled: state.phase !== PHASES.UPDATE || pendingUpdates > 0 || state.winner !== null
+    disabled: !canUseTurnControls || state.phase !== PHASES.UPDATE || pendingUpdates > 0 || state.winner !== null
   }, ['Valider mise à jour']));
 
   buttons.push(createElement('button', {
     onclick: () => {
       const card = drawForPlayer('system');
+      noteRemoteLocalAction(true);
       renderGameScreen();
       if (card) spawnArcadeEffect('draw', 'DRAW');
     },
-    disabled: state.phase !== PHASES.DRAW || state.winner !== null
+    disabled: !canUseTurnControls || state.phase !== PHASES.DRAW || state.winner !== null
   }, ['Piocher Système']));
 
   buttons.push(createElement('button', {
     className: 'warn',
     onclick: () => {
       const ended = endTurn();
+      noteRemoteLocalAction(ended);
       renderGameScreen();
       if (ended) spawnArcadeEffect('draw', 'TURN');
     },
-    disabled: !canEndTurn()
+    disabled: !canUseTurnControls || !canEndTurn()
   }, ['Fin de tour']));
 
   buttons.push(createElement('button', {
     className: 'bad',
     onclick: () => {
       const rebooted = rebootCurrentPlayer();
+      noteRemoteLocalAction(rebooted);
       renderGameScreen();
       if (rebooted) spawnArcadeEffect('reboot', 'REBOOT');
     },
-    disabled: state.phase !== PHASES.ACTION || state.winner !== null || currentPlayer.rebootedThisTurn
+    disabled: !canUseTurnControls || state.phase !== PHASES.ACTION || state.winner !== null || currentPlayer.rebootedThisTurn
   }, ['Reboot volontaire']));
 
   const winnerBox = state.winner !== null ? createElement('div', { className: 'winner-banner' }, [
@@ -454,7 +616,7 @@ function renderCenterPanel(state) {
     createElement('h2', { textContent: 'État du tour' }),
     renderPhaseRail(state),
     createElement('div', { className: 'big', textContent: phaseText }),
-    createElement('div', { className: 'turn-owner', textContent: `Joueur actif : ${currentPlayer.name}` }),
+    createElement('div', { className: 'turn-owner', textContent: remoteTurnHint(state) }),
     createElement('div', { className: 'phase-actions' }, buttons),
     winnerBox,
     createElement('div', { className: 'log action-log' }, [
@@ -537,7 +699,9 @@ function phaseClass(phase) {
 function drawPileButton(playerIndex, deckType) {
   const current = getState().currentPlayerIndex;
   if (playerIndex !== current) return;
+  if (!canControlPlayer(playerIndex)) return;
   const card = drawForPlayer(deckType);
+  noteRemoteLocalAction(true);
   renderGameScreen();
   if (card) spawnArcadeEffect('draw', 'DRAW');
 }
@@ -545,10 +709,12 @@ function drawPileButton(playerIndex, deckType) {
 function applyUpdate(functionId) {
   const state = getState();
   const beforeOwner = state.players.find((player) => player.active.some((fn) => fn.id === functionId));
+  if (!beforeOwner || !canControlPlayer(beforeOwner.index)) return;
   const before = beforeOwner?.active.find((fn) => fn.id === functionId);
   const beforeFrames = before ? before.frames.length : 0;
   const wasUnwinding = Boolean(before?.reachedZero);
   const updated = updateFunction(functionId);
+  noteRemoteLocalAction(updated);
   renderGameScreen();
   if (!updated || !beforeOwner || !before) return;
   const afterOwner = getState().players.find((player) => player.index === beforeOwner.index);
@@ -567,12 +733,17 @@ function applyUpdate(functionId) {
 }
 
 function applyOverclock(functionId) {
+  const state = getState();
+  const owner = state.players.find((player) => player.active.some((fn) => fn.id === functionId));
+  if (!owner || !canControlPlayer(owner.index)) return;
   const used = useOverclock(functionId);
+  noteRemoteLocalAction(used);
   renderGameScreen();
   if (used) spawnArcadeEffect('overclock', '2X');
 }
 
 async function playCardAction(playerIndex, cardId) {
+  if (!canControlPlayer(playerIndex)) return;
   const card = getState().players[playerIndex].hand.find((c) => c.id === cardId);
   if (!card) return;
   const targetData = {};
@@ -587,6 +758,7 @@ async function playCardAction(playerIndex, cardId) {
     targetData.functionId = selected;
   }
   const played = playCard(playerIndex, cardId, targetData);
+  noteRemoteLocalAction(played);
   renderGameScreen();
   if (played) spawnCardEffect(card);
 }

@@ -130,7 +130,7 @@ function save_game($body)
 
 function table_name($config)
 {
-    $table = $config['table_games'] ?? 'games';
+    $table = $config['table_games'] ?? (($config['table_prefix'] ?? 'sops_') . 'games');
     if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Nom de table invalide.']);
