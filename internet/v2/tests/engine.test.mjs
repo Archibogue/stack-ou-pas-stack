@@ -184,6 +184,10 @@ function assertInterruptsCanReactOnOpponentTurn() {
   assert.equal(engine.playCard(1, opponent.hand[0].id, { functionId: target.id }), true);
   assert.equal(target.broken, true, 'Opponent Stack Spike can break a function during the active player turn');
   assert.equal(state.phase, rules.PHASES.UPDATE, 'Interrupts do not advance the active player phase');
+  const interruptLog = state.log.find((entry) => entry.cardKey === 'stack_spike');
+  assert.equal(interruptLog.cardType, 'Interrupt');
+  assert.equal(interruptLog.actorIndex, 1);
+  assert.equal(interruptLog.targetPlayerIndex, 0);
 
   state = engine.newGame('Ada', 'Grace');
   current = state.players[0];

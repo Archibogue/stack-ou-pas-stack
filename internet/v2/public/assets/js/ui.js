@@ -9,6 +9,7 @@ let remotePollTimer = null;
 let remotePollInFlight = false;
 let lastRemoteSignature = '';
 let remotePollPausedUntil = 0;
+let lastSeenLogOrder = 0;
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -109,6 +110,11 @@ function canControlCurrentTurn(state = getState()) {
   return getRemoteSeat(state) === state.currentPlayerIndex;
 }
 
+function remoteBottomPlayerIndex(state = getState()) {
+  const seat = getRemoteSeat(state);
+  return seat === null ? 0 : seat;
+}
+
 function remoteSeatText(state = getState()) {
   if (!isRemoteState(state)) return '';
   const seat = getRemoteSeat(state);
@@ -158,6 +164,7 @@ function noteRemoteLocalAction(changed = true) {
   if (!isRemoteState(state)) return;
   remotePollPausedUntil = Date.now() + 2200;
   lastRemoteSignature = remoteSignature(state);
+  lastSeenLogOrder = state.logSequence || lastSeenLogOrder;
 }
 
 function startRemotePollingIfNeeded() {
@@ -165,6 +172,7 @@ function startRemotePollingIfNeeded() {
   const state = getState();
   if (!isRemoteState(state)) return;
   lastRemoteSignature = remoteSignature(state);
+  lastSeenLogOrder = Math.max(lastSeenLogOrder, state.logSequence || 0);
   remotePollTimer = window.setInterval(() => {
     pollRemoteGame();
   }, 2200);
@@ -192,15 +200,43 @@ async function pollRemoteGame() {
     const incomingSequence = incoming.logSequence || 0;
     if (incomingSignature === lastRemoteSignature || incomingSequence < currentSequence) return;
     const seat = getRemoteSeat(current);
+    const alert = findIncomingInterruptAlert(current, incoming, seat);
     loadGame(incoming);
     setRemoteCode(code);
     if (seat !== null) saveRemoteSeat(code, seat);
     lastRemoteSignature = remoteSignature(getState());
+    lastSeenLogOrder = Math.max(lastSeenLogOrder, incomingSequence);
     renderGameScreen();
-    spawnArcadeEffect('draw', 'SYNC');
+    if (alert) showInterruptWarning(alert);
+    else spawnArcadeEffect('draw', 'SYNC');
   } finally {
     remotePollInFlight = false;
   }
+}
+
+function findIncomingInterruptAlert(current, incoming, seat) {
+  if (seat === null || !incoming?.log?.length) return null;
+  const lastSeen = Math.max(lastSeenLogOrder, current?.logSequence || 0);
+  const victim = incoming.players?.[seat];
+  const attacker = incoming.players?.[1 - seat];
+  if (!victim || !attacker) return null;
+  const newEntries = incoming.log.filter((entry) => (entry.order || 0) > lastSeen);
+  const playedEntry = newEntries.find((entry) => (
+    entry.event === 'card_played'
+    && entry.cardType === 'Interrupt'
+    && entry.actorIndex !== seat
+    && entry.targetPlayerIndex === seat
+  ));
+  if (!playedEntry) return null;
+  const impactEntry = newEntries.find((entry) => (
+    (entry.cls === 'bad' || entry.cls === 'warn')
+    && ((entry.text || '').includes(victim.name) || (entry.order || 0) > (playedEntry.order || 0))
+  ));
+  return {
+    title: 'Interrupt adverse !',
+    text: impactEntry?.text || playedEntry.text,
+    attacker: attacker.name
+  };
 }
 
 function showHomeScreen() {
@@ -362,7 +398,7 @@ function renderGameScreen() {
   const currentPlayer = state.players[state.currentPlayerIndex];
   const remoteInfo = remoteSeatText(state);
   const headerStatus = state.winner !== null
-    ? 'Partie terminee'
+    ? 'Partie terminée'
     : `Joueur actif : ${currentPlayer.name}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
   const header = createElement('div', { className: 'header game-header' }, [
     createElement('div', { className: 'brand-block' }, [
@@ -382,27 +418,48 @@ function renderGameScreen() {
     ])
   ]);
 
-  const board = createElement('div', { className: 'grid-3 game-board' }, [
-    renderPlayerPanel(state.players[0]),
-    renderCenterPanel(state),
-    renderPlayerPanel(state.players[1])
-  ]);
+  const board = isRemoteState(state)
+    ? renderRemoteBoard(state)
+    : createElement('div', { className: 'grid-3 game-board' }, [
+      renderPlayerPanel(state.players[0]),
+      renderCenterPanel(state),
+      renderPlayerPanel(state.players[1])
+    ]);
 
   app.append(header, board, renderHelpPanel());
 }
 
-function renderPlayerPanel(player) {
+function renderRemoteBoard(state) {
+  const bottomIndex = remoteBottomPlayerIndex(state);
+  const topIndex = 1 - bottomIndex;
+  return createElement('div', { className: 'hearthstone-board game-board' }, [
+    renderPlayerPanel(state.players[topIndex], { arenaRole: 'opponent' }),
+    renderCenterPanel(state),
+    renderPlayerPanel(state.players[bottomIndex], { arenaRole: 'local' })
+  ]);
+}
+
+function renderPlayerPanel(player, options = {}) {
   const state = getState();
   const isActive = state.currentPlayerIndex === player.index && state.phase !== PHASES.GAME_OVER;
   const brokenCount = player.active.filter((fn) => fn.broken).length;
   const tone = player.index === 0 ? 'cyan' : 'orange';
   const canSeeHand = canViewPlayerHand(player.index);
-  const panel = createElement('section', { className: `panel player-panel player-${tone}${isActive ? ' active' : ''}` }, [
+  const roleClass = options.arenaRole ? ` remote-player remote-player-${options.arenaRole}` : '';
+  const isSpectatorBottom = options.arenaRole === 'local' && isRemoteState(state) && getRemoteSeat(state) === null;
+  const seatChip = isSpectatorBottom
+    ? 'Spectateur'
+    : options.arenaRole === 'local'
+    ? 'Votre camp'
+    : options.arenaRole === 'opponent'
+      ? 'Adversaire'
+      : player.index === 0 ? 'Joueur Cyan' : 'Joueur Orange';
+  const panel = createElement('section', { className: `panel player-panel player-${tone}${roleClass}${isActive ? ' active' : ''}` }, [
     createElement('div', { className: 'panel-body' }, [
       createElement('div', { className: 'player-header' }, [
         createElement('div', { className: 'player-name' }, [
           createElement('h2', { className: 'player-title', textContent: player.name }),
-          createElement('div', { className: 'chip', textContent: player.index === 0 ? 'Joueur Cyan' : 'Joueur Orange' })
+          createElement('div', { className: 'chip', textContent: seatChip })
         ]),
         createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
       ]),
@@ -785,6 +842,17 @@ function spawnCardEffect(card) {
     return;
   }
   spawnArcadeEffect('draw', 'OK');
+}
+
+function showInterruptWarning(alert) {
+  spawnArcadeEffect('hit', 'ALERTE');
+  const warning = createElement('div', { className: 'interrupt-warning', role: 'status' }, [
+    createElement('span', { className: 'eyebrow', textContent: alert.attacker }),
+    createElement('strong', { textContent: alert.title }),
+    createElement('p', { textContent: alert.text })
+  ]);
+  document.body.appendChild(warning);
+  window.setTimeout(() => warning.remove(), 3600);
 }
 
 function getTargetChoices(playerIndex, card) {

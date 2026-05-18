@@ -532,14 +532,18 @@ function applyTerminalEffect(player, func, bonus) {
 export function logAction(state, text, cls = '', context = {}) {
   state.logSequence = (state.logSequence || 0) + 1;
   const player = context.player || state.players?.[state.currentPlayerIndex]?.name || 'Système';
-  state.log.push({
+  const entry = {
     text,
     cls,
     order: state.logSequence,
     turn: state.turn,
     player,
     phase: context.phase || formatPhaseForLog(state.phase)
+  };
+  ['event', 'cardKey', 'cardType', 'actorIndex', 'targetPlayerIndex'].forEach((key) => {
+    if (context[key] !== undefined) entry[key] = context[key];
   });
+  state.log.push(entry);
   if (state.log.length > 200) state.log.shift();
 }
 
@@ -811,7 +815,15 @@ function playSystemCard(player, card, targetData) {
     return false;
   }
   let resolved = true;
-  logAction(gameState, `${player.name} joue ${card.name} : début de résolution.`, 'sys', { player: player.name });
+  const targetOwner = targetData.functionId ? findFunctionOwner(targetData.functionId) : null;
+  logAction(gameState, `${player.name} joue ${card.name} : début de résolution.`, 'sys', {
+    player: player.name,
+    event: 'card_played',
+    cardKey: card.key,
+    cardType: card.type,
+    actorIndex: player.index,
+    targetPlayerIndex: targetOwner?.index ?? null
+  });
   switch (card.key) {
     case 'hotfix':
       resolved = repairFunction(player, targetData.functionId);
