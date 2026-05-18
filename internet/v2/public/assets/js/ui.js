@@ -393,13 +393,28 @@ function renderGameScreen() {
   const state = getState();
   if (!state) return;
   if (isRemoteState(state)) lastRemoteSignature = remoteSignature(state);
+  const remoteMode = isRemoteState(state);
   app.innerHTML = '';
-  app.className = `app game-screen phase-${phaseClass(state.phase)}`;
+  app.className = `app game-screen phase-${phaseClass(state.phase)}${remoteMode ? ' remote-game' : ''}`;
   const currentPlayer = state.players[state.currentPlayerIndex];
   const remoteInfo = remoteSeatText(state);
   const headerStatus = state.winner !== null
     ? 'Partie terminée'
     : `Joueur actif : ${currentPlayer.name}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
+  const headerActions = remoteMode
+    ? [
+      createElement('button', { onclick: () => showHomeScreen() }, ['Accueil']),
+      createElement('button', { onclick: () => pollRemoteGame(), disabled: remotePollInFlight }, ['Synchroniser']),
+      createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles'])
+    ]
+    : [
+      createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
+      createElement('button', { className: 'undo-button', onclick: () => undoAction(), disabled: !canUndo() }, ['Undo']),
+      createElement('button', { onclick: () => saveGame() }, ['Sauvegarder local']),
+      createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
+      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
+      createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles complètes'])
+    ];
   const header = createElement('div', { className: 'header game-header' }, [
     createElement('div', { className: 'brand-block' }, [
       createElement('span', { className: 'eyebrow', textContent: `Tour ${state.turn}` }),
@@ -407,18 +422,10 @@ function renderGameScreen() {
       createElement('p', { textContent: headerStatus }),
       renderPhaseRail(state)
     ]),
-    createElement('div', { className: 'header-actions' }, [
-      createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
-      isRemoteState(state) ? createElement('button', { onclick: () => pollRemoteGame(), disabled: remotePollInFlight }, ['Synchroniser']) : null,
-      createElement('button', { className: 'undo-button', onclick: () => undoAction(), disabled: isRemoteState(state) || !canUndo() }, ['Undo']),
-      createElement('button', { onclick: () => saveGame() }, ['Sauvegarder local']),
-      createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
-      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
-      createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles complètes'])
-    ])
+    createElement('div', { className: 'header-actions' }, headerActions)
   ]);
 
-  const board = isRemoteState(state)
+  const board = remoteMode
     ? renderRemoteBoard(state)
     : createElement('div', { className: 'grid-3 game-board' }, [
       renderPlayerPanel(state.players[0]),
@@ -426,16 +433,138 @@ function renderGameScreen() {
       renderPlayerPanel(state.players[1])
     ]);
 
-  app.append(header, board, renderHelpPanel());
+  app.append(header, board);
+  if (!remoteMode) app.append(renderHelpPanel());
 }
 
 function renderRemoteBoard(state) {
   const bottomIndex = remoteBottomPlayerIndex(state);
   const topIndex = 1 - bottomIndex;
   return createElement('div', { className: 'hearthstone-board game-board' }, [
-    renderPlayerPanel(state.players[topIndex], { arenaRole: 'opponent' }),
+    renderRemoteOpponentSummary(state.players[topIndex]),
     renderCenterPanel(state),
-    renderPlayerPanel(state.players[bottomIndex], { arenaRole: 'local' })
+    renderRemoteLocalConsole(state.players[bottomIndex])
+  ]);
+}
+
+function renderRemoteOpponentSummary(player) {
+  const brokenCount = player.active.filter((fn) => fn.broken).length;
+  return createElement('section', { className: 'panel remote-opponent-summary' }, [
+    createElement('div', { className: 'panel-body' }, [
+      createElement('div', { className: 'remote-identity' }, [
+        createElement('div', { className: 'player-name' }, [
+          createElement('span', { className: 'eyebrow', textContent: 'Adversaire' }),
+          createElement('h2', { className: 'player-title', textContent: player.name })
+        ]),
+        createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
+      ]),
+      createElement('div', { className: 'remote-public-counters' }, [
+        stat('ML', player.memFree),
+        stat('MT', player.memTotal),
+        stat('Main', player.hand.length),
+        stat('Cassées', brokenCount)
+      ]),
+      createElement('div', { className: 'remote-public-zone' }, [
+        createElement('div', { className: 'remote-zone-head' }, [
+          createElement('strong', { textContent: 'Fonctions visibles' }),
+          createElement('span', { className: 'chip', textContent: `${player.functionsDeck.length} F · ${player.systemDeck.length} S · def. ${player.discard.length}` })
+        ]),
+        createElement('div', { className: 'remote-function-row' }, player.active.length
+          ? player.active.map((fn) => renderRemoteFunctionCard(player, fn, { actions: false }))
+          : [emptyState('Aucune fonction')])
+      ]),
+      createElement('div', { className: 'remote-hardware-row' }, player.hardware.length
+        ? player.hardware.map((hw) => renderHardwareChip(hw))
+        : [createElement('span', { className: 'chip', textContent: 'Aucun hardware' })])
+    ])
+  ]);
+}
+
+function renderRemoteLocalConsole(player) {
+  const state = getState();
+  const brokenCount = player.active.filter((fn) => fn.broken).length;
+  const seat = getRemoteSeat(state);
+  const label = seat === null ? 'Spectateur' : 'Votre camp';
+  return createElement('section', { className: 'panel remote-local-console' }, [
+    createElement('div', { className: 'panel-body' }, [
+      createElement('div', { className: 'remote-local-status' }, [
+        createElement('div', { className: 'remote-identity' }, [
+          createElement('div', { className: 'player-name' }, [
+            createElement('span', { className: 'eyebrow', textContent: label }),
+            createElement('h2', { className: 'player-title', textContent: player.name })
+          ]),
+          createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
+        ]),
+        createElement('div', { className: 'remote-public-counters' }, [
+          stat('ML', player.memFree),
+          stat('MT', player.memTotal),
+          stat('Utilisée', getPlayerUsedMemory(player)),
+          stat('Main', player.hand.length),
+          stat('Cassées', brokenCount)
+        ]),
+        createElement('div', { className: 'remote-hardware-row' }, player.hardware.length
+          ? player.hardware.map((hw) => renderHardwareChip(hw))
+          : [createElement('span', { className: 'chip', textContent: 'Aucun hardware' })])
+      ]),
+      createElement('div', { className: 'remote-local-functions' }, [
+        createElement('div', { className: 'remote-zone-head' }, [
+          createElement('strong', { textContent: 'Vos fonctions' }),
+          createElement('span', { className: 'chip', textContent: `${player.functionsDeck.length} F · ${player.systemDeck.length} S · def. ${player.discard.length}` })
+        ]),
+        createElement('div', { className: 'remote-function-row' }, player.active.length
+          ? player.active.map((fn) => renderRemoteFunctionCard(player, fn, { actions: true }))
+          : [emptyState('Aucune fonction')])
+      ]),
+      createElement('div', { className: 'remote-hand-dock' }, [
+        createElement('div', { className: 'hand-cards remote-hand-cards', style: `--cards:${Math.max(1, player.hand.length)}` }, player.hand.length
+          ? player.hand.map((card, index) => renderCard(player, card, index, { compact: true, previewOnClick: true }))
+          : [emptyState('Main vide')])
+      ])
+    ])
+  ]);
+}
+
+function renderRemoteFunctionCard(player, fn, options = {}) {
+  const state = getState();
+  const canAct = Boolean(options.actions) && canControlPlayer(player.index);
+  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const modeClass = fn.broken ? 'broken' : fn.reachedZero ? 'unwinding' : 'stacking';
+  const nextEffect = getNextFunctionEffect(fn);
+  return createElement('div', {
+    className: `remote-function-card previewable-function ${modeClass}${canUpdate ? ' actionable' : ''}`,
+    onclick: () => showFunctionPreview(player, fn, options)
+  }, [
+    createElement('div', { className: 'remote-function-title' }, [
+      createElement('strong', { textContent: fn.name }),
+      createElement('span', { className: 'chip', textContent: fn.broken ? 'Cassée' : fn.reachedZero ? 'Dépilage' : 'Empilage' })
+    ]),
+    createElement('div', { className: 'function-meta', textContent: `R=${fn.R} · cadres ${fn.frames.length} · mem ${fn.memUsed}` }),
+    createElement('div', { className: 'frame-row compact-frames' }, fn.frames.map((frame, index) => createElement('span', {
+      className: `frame${frame === 'P' ? ' parasite' : ''}`,
+      style: `--i:${index}`,
+      textContent: frame
+    }))),
+    createElement('div', { className: 'next-effect compact-next' }, [
+      createElement('span', { textContent: nextEffect.label }),
+      createElement('strong', { textContent: nextEffect.text })
+    ]),
+    options.actions ? createElement('div', { className: 'card-actions compact-actions' }, [
+      createElement('button', {
+        className: 'good',
+        onclick: (event) => {
+          event.stopPropagation();
+          applyUpdate(fn.id);
+        },
+        disabled: !canUpdate
+      }, ['Update']),
+      createElement('button', {
+        onclick: (event) => {
+          event.stopPropagation();
+          applyOverclock(fn.id);
+        },
+        disabled: !canAct || !canUseOverclock(fn.id)
+      }, ['2X'])
+    ]) : null
   ]);
 }
 
@@ -494,7 +623,7 @@ function renderPlayerPanel(player, options = {}) {
       createElement('section', { className: 'play-area compact-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Hardware' }),
         createElement('div', { className: 'chips' }, player.hardware.length
-          ? player.hardware.map((hw) => createElement('span', { className: 'chip hardware-chip', textContent: hw.name }))
+          ? player.hardware.map((hw) => renderHardwareChip(hw))
           : [emptyState('Aucun hardware')])
       ]),
       createElement('section', { className: 'play-area' }, [
@@ -570,11 +699,13 @@ function renderFunctionCard(player, fn) {
   ]);
 }
 
-function renderCard(player, card, index = 0) {
+function renderCard(player, card, index = 0, options = {}) {
   const state = getState();
   const enabled = canUseCardFromHand(player, card);
   const typeClass = cardTypeClass(card.type);
   const actionLabel = card.type === 'Interrupt' && state.currentPlayerIndex !== player.index ? 'Interrompre' : 'Jouer';
+  const compactClass = options.compact ? ' compact-card' : '';
+  const previewClass = options.previewOnClick ? ' previewable-card' : '';
   const children = [
     createElement('div', { className: 'card-top' }, [
       createElement('span', { className: `type-badge ${typeClass}`, textContent: card.type }),
@@ -586,10 +717,131 @@ function renderCard(player, card, index = 0) {
       : null,
     createElement('div', { className: 'desc', textContent: card.description }),
     createElement('div', { className: 'card-actions' }, [
-      createElement('button', { onclick: () => playCardAction(player.index, card.id), disabled: !enabled }, [actionLabel])
+      createElement('button', {
+        onclick: (event) => {
+          event.stopPropagation();
+          playCardAction(player.index, card.id);
+        },
+        disabled: !enabled
+      }, [actionLabel])
     ])
   ];
-  return createElement('article', { className: `card ${typeClass}`, style: `--i:${index}` }, children);
+  return createElement('article', {
+    className: `card ${typeClass}${compactClass}${previewClass}`,
+    style: `--i:${index}`,
+    onclick: options.previewOnClick ? () => showCardPreview(player, card) : null
+  }, children);
+}
+
+function showCardPreview(player, card) {
+  const enabled = canUseCardFromHand(player, card);
+  const typeClass = cardTypeClass(card.type);
+  const actionLabel = card.type === 'Interrupt' && getState().currentPlayerIndex !== player.index ? 'Interrompre' : 'Jouer';
+  const content = createElement('div', { className: 'card-preview-content' }, [
+    createElement('article', { className: `card ${typeClass} preview-card` }, [
+      createElement('div', { className: 'card-top' }, [
+        createElement('span', { className: `type-badge ${typeClass}`, textContent: card.type }),
+        createElement('span', { className: 'cost-badge', textContent: `Coût ${card.cost}` })
+      ]),
+      createElement('h3', { className: 'title', textContent: card.name }),
+      card.type === 'Fonction'
+        ? createElement('div', { className: 'card-rule', textContent: `${card.mode === 'fixe' ? 'Empiler' : 'Empiler jusqu’à'} ${card.maxR} · valeur ${card.value}` })
+        : null,
+      createElement('div', { className: 'desc', textContent: card.description })
+    ]),
+    createElement('div', { className: 'phase-actions preview-actions' }, [
+      createElement('button', {
+        className: 'primary',
+        onclick: () => {
+          hideModal();
+          playCardAction(player.index, card.id);
+        },
+        disabled: !enabled
+      }, [actionLabel]),
+      createElement('button', { onclick: () => hideModal() }, ['Fermer'])
+    ])
+  ]);
+  showModal(card.name, content, []);
+}
+
+function renderHardwareChip(hardware) {
+  return createElement('button', {
+    className: 'chip hardware-chip hardware-chip-button',
+    onclick: (event) => {
+      event.stopPropagation();
+      showHardwarePreview(hardware);
+    },
+    title: `Voir ${hardware.name}`
+  }, [hardware.name]);
+}
+
+function showHardwarePreview(hardware) {
+  const content = createElement('div', { className: 'card-preview-content' }, [
+    createElement('article', { className: 'card hardware preview-card' }, [
+      createElement('div', { className: 'card-top' }, [
+        createElement('span', { className: 'type-badge hardware', textContent: hardware.type || 'Hardware' }),
+        createElement('span', { className: 'cost-badge', textContent: `Coût ${hardware.cost ?? '-'}` })
+      ]),
+      createElement('h3', { className: 'title', textContent: hardware.name }),
+      createElement('div', { className: 'desc', textContent: hardware.description || 'Hardware actif.' })
+    ]),
+    createElement('div', { className: 'phase-actions preview-actions' }, [
+      createElement('button', { onclick: () => hideModal() }, ['Fermer'])
+    ])
+  ]);
+  showModal(hardware.name, content, []);
+}
+
+function showFunctionPreview(player, fn, options = {}) {
+  const state = getState();
+  const canAct = Boolean(options.actions) && canControlPlayer(player.index);
+  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const effects = getFunctionEffectSummary(fn);
+  const nextEffect = getNextFunctionEffect(fn);
+  const content = createElement('div', { className: 'function-preview-content' }, [
+    createElement('div', { className: 'function-preview-card' }, [
+      createElement('div', { className: 'remote-function-title' }, [
+        createElement('strong', { textContent: fn.name }),
+        createElement('span', { className: 'chip', textContent: fn.broken ? 'Cassée' : fn.reachedZero ? 'Dépilage' : 'Empilage' })
+      ]),
+      createElement('div', { className: 'function-meta', textContent: `${player.name} · R=${fn.R} · cadres ${fn.frames.length} · mémoire ${fn.memUsed}` }),
+      createElement('div', { className: 'frame-row preview-stack compact-frames' }, fn.frames.map((frame, index) => createElement('span', {
+        className: `frame${frame === 'P' ? ' parasite' : ''}`,
+        style: `--i:${index}`,
+        textContent: frame
+      }))),
+      createElement('div', { className: 'next-effect' }, [
+        createElement('span', { textContent: nextEffect.label }),
+        createElement('strong', { textContent: nextEffect.text })
+      ]),
+      createElement('div', { className: 'effect-list' }, [
+        effectLine('Cas de base', effects.base),
+        effectLine('Remontée', effects.up),
+        effectLine('Terminaison', effects.terminal)
+      ])
+    ]),
+    options.actions ? createElement('div', { className: 'phase-actions preview-actions' }, [
+      createElement('button', {
+        className: 'good',
+        onclick: () => {
+          hideModal();
+          applyUpdate(fn.id);
+        },
+        disabled: !canUpdate
+      }, ['Mettre à jour']),
+      createElement('button', {
+        onclick: () => {
+          hideModal();
+          applyOverclock(fn.id);
+        },
+        disabled: !canAct || !canUseOverclock(fn.id)
+      }, ['Overclock']),
+      createElement('button', { onclick: () => hideModal() }, ['Fermer'])
+    ]) : createElement('div', { className: 'phase-actions preview-actions' }, [
+      createElement('button', { onclick: () => hideModal() }, ['Fermer'])
+    ])
+  ]);
+  showModal(fn.name, content, []);
 }
 
 function renderHiddenHand(player) {
@@ -669,7 +921,7 @@ function renderCenterPanel(state) {
     createElement('p', { textContent: `${state.players[state.winner].name} remporte la partie.` })
   ]) : null;
 
-  return createElement('section', { className: 'panel panel-body phase-card' }, [
+  return createElement('section', { className: `panel panel-body phase-card${isRemoteState(state) ? ' remote-phase-card' : ''}` }, [
     createElement('h2', { textContent: 'État du tour' }),
     renderPhaseRail(state),
     createElement('div', { className: 'big', textContent: phaseText }),
