@@ -45,6 +45,7 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     winner: null,
     log: [],
     logSequence: 0,
+    undoStack: [],
     firstTurn: true,
     remoteCode: null,
     isRemote: false,
@@ -90,7 +91,9 @@ export function createFunctionFrame(card, R) {
 }
 
 export function cloneStateForSave(state) {
-  return JSON.parse(JSON.stringify(state));
+  const clone = JSON.parse(JSON.stringify(state));
+  delete clone.undoStack;
+  return clone;
 }
 
 export function restoreState(data) {
@@ -98,6 +101,7 @@ export function restoreState(data) {
   if (!state.phase) state.phase = PHASES.SETUP;
   state.log = state.log || [];
   state.logSequence = state.logSequence || state.log.length || 0;
+  state.undoStack = [];
   state.players?.forEach((player) => {
     player.updatedThisTurn = player.updatedThisTurn || [];
     player.planifierUsed = Boolean(player.planifierUsed);

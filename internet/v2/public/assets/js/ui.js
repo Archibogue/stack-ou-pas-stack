@@ -1,5 +1,5 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadLocalState } from './storage.js';
 
 const app = document.getElementById('app');
@@ -173,6 +173,11 @@ function loadDemo(name) {
   renderGameScreen();
 }
 
+function undoAction() {
+  if (!undoLastAction()) return;
+  renderGameScreen();
+}
+
 function renderGameScreen() {
   const state = getState();
   if (!state) return;
@@ -188,6 +193,7 @@ function renderGameScreen() {
     ]),
     createElement('div', { className: 'header-actions' }, [
       createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
+      createElement('button', { className: 'undo-button', onclick: () => undoAction(), disabled: !canUndo() }, ['Undo']),
       createElement('button', { onclick: () => saveGame() }, ['Sauvegarder local']),
       createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
       createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),

@@ -126,6 +126,10 @@ button.warn {
   border-color: rgba(233, 196, 106, 0.78);
 }
 
+.undo-button {
+  border-color: rgba(122, 162, 247, 0.62);
+}
+
 a {
   color: var(--cyan);
 }

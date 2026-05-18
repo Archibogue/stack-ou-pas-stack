@@ -102,6 +102,24 @@ function assertStructuredLog() {
   assert.ok(state.log[0].order < state.log[state.log.length - 1].order, 'Log is chronological');
 }
 
+function assertUndo() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  player.memFree = player.memTotal;
+
+  assert.equal(engine.canUndo(), false);
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 2 }), true);
+  assert.equal(engine.canUndo(), true);
+  assert.equal(engine.getState().players[0].active.length, 1);
+  assert.equal(engine.undoLastAction(), true);
+
+  const restored = engine.getState();
+  assert.equal(restored.players[0].active.length, 0);
+  assert.equal(restored.players[0].hand.length, 1);
+  assert.equal(restored.players[0].memFree, 11);
+}
+
 function assertPlanifierAndHotfix() {
   const state = engine.newGame('Ada', 'Grace');
   const player = state.players[0];
@@ -179,6 +197,17 @@ function assertPlayerDeckCoherence(player) {
   });
 }
 
+function assertFunctionStateCoherence(fn) {
+  const numericFrames = fn.frames.filter((frame) => frame !== 'P');
+  assert.equal(numericFrames[0], fn.R, `${fn.name} first frame must be R`);
+  for (let i = 1; i < numericFrames.length; i += 1) {
+    assert.equal(numericFrames[i], numericFrames[i - 1] - 1, `${fn.name} frames must descend by 1`);
+  }
+  assert.equal(fn.reachedZero, numericFrames.includes(0), `${fn.name} reachedZero must match frames`);
+  const expectedMem = fn.cost + fn.frames.slice(1).filter((frame) => frame !== 'P').length;
+  assert.equal(fn.memUsed, expectedMem, `${fn.name} memory must ignore parasite frames`);
+}
+
 function assertDemoScenarios() {
   const scenarios = [
     'depth_choice',
@@ -188,12 +217,25 @@ function assertDemoScenarios() {
     'ram',
     'stack_spike_break'
   ];
+  const expectedTurns = {
+    depth_choice: 3,
+    base_not_end: 4,
+    strategic_memory: 4,
+    repair_or_clean: 5,
+    ram: 3,
+    stack_spike_break: 6
+  };
 
   scenarios.forEach((scenario) => {
     const state = engine.loadDemoScenario(scenario);
     assert.notEqual(state.phase, rules.PHASES.GAME_OVER, `${scenario} should be playable`);
-    assert.ok(state.log.length >= 3, `${scenario} should include a readable history`);
-    state.players.forEach(assertPlayerDeckCoherence);
+    assert.equal(state.turn, expectedTurns[scenario], `${scenario} should use a plausible turn number`);
+    assert.ok(state.log.length >= 5, `${scenario} should include a readable route to the situation`);
+    state.players.forEach((player) => {
+      assert.ok(player.memFree >= 0 && player.memFree <= player.memTotal + player.tempMemory, `${scenario}: ${player.name} memory must be legal`);
+      player.active.forEach(assertFunctionStateCoherence);
+      assertPlayerDeckCoherence(player);
+    });
   });
 
   let state = engine.loadDemoScenario('base_not_end');
@@ -233,6 +275,7 @@ assertInitialSetup();
 assertDeckBuild();
 assertFunctionMemoryLifecycle();
 assertStructuredLog();
+assertUndo();
 assertPlanifierAndHotfix();
 assertRebootStopsActions();
 assertDemoScenarios();

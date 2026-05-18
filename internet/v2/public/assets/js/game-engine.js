@@ -9,8 +9,40 @@ export function getState() {
   return gameState;
 }
 
+function createUndoPoint() {
+  if (!gameState) return null;
+  const snapshot = cloneStateForSave(gameState);
+  const stack = gameState.undoStack || [];
+  stack.push(snapshot);
+  while (stack.length > 30) stack.shift();
+  gameState.undoStack = stack;
+  return snapshot;
+}
+
+function discardUndoPoint(snapshot) {
+  if (!snapshot || !gameState?.undoStack) return;
+  const index = gameState.undoStack.lastIndexOf(snapshot);
+  if (index !== -1) gameState.undoStack.splice(index, 1);
+}
+
+export function canUndo() {
+  return Boolean(gameState?.undoStack?.length);
+}
+
+export function undoLastAction() {
+  if (!canUndo()) return false;
+  const stack = gameState.undoStack;
+  const previous = stack.pop();
+  const restored = restoreState(previous);
+  restored.undoStack = stack;
+  gameState = restored;
+  persistGameState();
+  return true;
+}
+
 export function newGame(player1, player2) {
   gameState = createGameState(player1, player2);
+  gameState.undoStack = [];
   gameState.phase = PHASES.UPDATE;
   gameState.log = [];
   logAction(gameState, `Nouvelle partie locale créée par ${player1} et ${player2}.`, 'sys');
@@ -263,11 +295,13 @@ export function canEndTurn() {
 
 export function drawForPlayer(deckType) {
   if (gameState.phase !== PHASES.DRAW || gameState.winner !== null) return null;
+  const undoPoint = createUndoPoint();
   const player = getCurrentPlayer();
   const card = drawFromDeck(player, deckType);
   if (!card) {
-    handleDeckExhaustion(player);
-    persistGameState();
+    const changed = handleDeckExhaustion(player);
+    if (changed) persistGameState();
+    else discardUndoPoint(undoPoint);
     return null;
   }
   logAction(gameState, `${player.name} pioche dans la pile ${deckType === 'functions' ? 'Fonctions' : 'Système'} et reçoit ${card.name}.`);
@@ -286,7 +320,9 @@ export function handleDeckExhaustion(player) {
       gameState.phase = PHASES.GAME_OVER;
       logAction(gameState, `${player.name} tombe à 0 mémoire totale. ${getOpponentPlayer().name} gagne.`, 'bad');
     }
+    return true;
   }
+  return false;
 }
 
 export function validateUpdatePhase() {
@@ -294,6 +330,7 @@ export function validateUpdatePhase() {
   const player = getCurrentPlayer();
   const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
   if (pending.length > 0) return false;
+  createUndoPoint();
   advanceAfterUpdatePhase();
   persistGameState();
   return true;
@@ -310,12 +347,13 @@ function advanceAfterUpdatePhase() {
   }
 }
 
-export function updateFunction(functionId, extra = false) {
+export function updateFunction(functionId, extra = false, options = {}) {
   if (gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
   const player = getCurrentPlayer();
   const func = player.active.find((item) => item.id === functionId);
   if (!func || func.broken) return false;
   if (player.updatedThisTurn.includes(func.id) && !extra) return false;
+  if (!options.skipUndo) createUndoPoint();
 
   if (!func.reachedZero) {
     if (func.frames.length >= MAX_FRAMES_PER_FUNCTION) {
@@ -583,17 +621,21 @@ export function canUseOverclock(functionId) {
 
 export function useOverclock(functionId) {
   if (!canUseOverclock(functionId)) return false;
+  const undoPoint = createUndoPoint();
   const player = getCurrentPlayer();
   player.overclockUsed = true;
   player.overclockTarget = functionId;
   logAction(gameState, `${player.name} active Overclocking.`, 'sys');
-  return updateFunction(functionId, true);
+  const result = updateFunction(functionId, true, { skipUndo: true });
+  if (!result) discardUndoPoint(undoPoint);
+  return result;
 }
 
 export function rebootCurrentPlayer() {
   if (gameState.phase !== PHASES.ACTION || gameState.winner !== null) return false;
   const player = getCurrentPlayer();
   if (player.rebootedThisTurn) return false;
+  createUndoPoint();
   rebootPlayer(player, false);
   player.rebootedThisTurn = true;
   persistGameState();
@@ -647,6 +689,7 @@ function shuffleInPlace(array) {
 
 export function endTurn() {
   if (gameState.phase !== PHASES.ACTION || gameState.winner !== null) return false;
+  createUndoPoint();
   const player = getCurrentPlayer();
   if (player.tempMemory > 0) {
     const expired = Math.min(player.tempMemory, player.memFree);
@@ -686,18 +729,23 @@ export function playCard(playerIndex, cardId, targetData = {}) {
   }
   const card = player.hand.find((item) => item.id === cardId);
   if (!card) return false;
+  const undoPoint = createUndoPoint();
+  let result = false;
   if (card.type === 'Fonction') {
-    const result = playFunctionCard(player, card, targetData.R);
+    result = playFunctionCard(player, card, targetData.R);
     if (result) persistGameState();
+    else discardUndoPoint(undoPoint);
     return result;
   }
   if (card.type === 'Hardware') {
-    const result = playHardwareCard(player, card, targetData);
+    result = playHardwareCard(player, card, targetData);
     if (result) persistGameState();
+    else discardUndoPoint(undoPoint);
     return result;
   }
-  const result = playSystemCard(player, card, targetData);
+  result = playSystemCard(player, card, targetData);
   if (result) persistGameState();
+  else discardUndoPoint(undoPoint);
   return result;
 }
 
@@ -985,12 +1033,15 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 1 — Choix de profondeur.',
-        'Joueur Cyan a gardé plusieurs fonctions à profondeur variable.',
+        'Tour 1 — Joueur Cyan a passé son premier tour sans lancer de fonction, pour garder sa mémoire pleine.',
+        'Tour 2 — Joueur Cyan a pioché côté Système et a conservé Planificateur local et Purge Contrôlée.',
+        'Tour 3 — Joueur Cyan arrive en phase de conception avec trois fonctions à profondeur variable en main.',
         'Objectif : jouer une fonction et choisir R. Plus R est haut, plus le bonus sera fort, mais plus la pile demandera de mémoire dans les prochains tours.'
       ]);
       break;
 
     case 'base_not_end':
+      game.turn = 4;
       configureDemoPlayer(cyan, {
         active: [
           demoFunction('factorielle', 2, { frames: [2, 1, 0], reachedZero: true, nextValue: -1 })
@@ -1006,13 +1057,15 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.UPDATE;
       addDemoHistory(game, [
         'Démonstration 2 — Le cas de base n’est pas la fin.',
-        'Joueur Cyan a lancé Fonction Factorielle avec R=2.',
-        'Deux mises à jour ont empilé [1] puis [0].',
-        'Prochaine action : mettre à jour la fonction. Le cadre [0] déclenche le cas de base, puis la fonction continuera avec [2] et [1] à dépiler.'
+        'Tour 1 — Joueur Cyan a lancé Fonction Factorielle avec R=2, ce qui a réservé 3 mémoire.',
+        'Tour 2 — Mise à jour de Joueur Cyan : la fonction a empilé [1] et payé 1 mémoire.',
+        'Tour 3 — Mise à jour de Joueur Cyan : la fonction a empilé [0] et payé 1 mémoire. Elle a atteint le cas de base, mais n’a pas encore terminé.',
+        'Tour 4 — Début de la mise à jour de Joueur Cyan : le prochain dépilage de [0] déclenchera le cas de base, puis la fonction continuera à remonter.'
       ]);
       break;
 
     case 'strategic_memory':
+      game.turn = 4;
       configureDemoPlayer(cyan, {
         active: [
           demoFunction('factorielle', 2, { frames: [2], reachedZero: false, nextValue: 1 }),
@@ -1030,33 +1083,38 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.UPDATE;
       addDemoHistory(game, [
         'Démonstration 3 — Choix stratégique avec 1 mémoire libre.',
-        'Joueur Cyan a seulement 1 ML.',
-        'Fonction Factorielle doit payer 1 ML pour empiler.',
-        'Compactage Mémoire est sur [0] : son cas de base rend 1 ML.',
-        'Objectif : choisir l’ordre des mises à jour pour comprendre comment la mémoire libre change le tour.'
+        'Tours précédents — Joueur Cyan a perdu 3 mémoire totale après des pénalités, il joue maintenant avec 8 mémoire totale.',
+        'Tour 2 — Joueur Cyan a lancé Compactage Mémoire avec R=1.',
+        'Tour 3 — Compactage Mémoire a empilé [0]. Joueur Cyan a ensuite lancé Fonction Factorielle avec R=2.',
+        'Tour 4 — Joueur Cyan commence la mise à jour avec seulement 1 mémoire libre.',
+        'Choix légal : mettre à jour Compactage d’abord libère de la mémoire, puis Factorielle peut empiler plus confortablement.'
       ]);
       break;
 
     case 'repair_or_clean':
+      game.turn = 5;
       configureDemoPlayer(cyan, {
         active: [
-          demoFunction('quicksort', 3, { broken: true, frames: [3, 2, 1, 'P'], reachedZero: false })
+          demoFunction('quicksort', 3, { broken: true, frames: [3, 2, 1, 0, 'P', 'P'], reachedZero: true })
         ],
         hand: ['hotfix', 'collecte', 'debug', 'purge'],
         discard: ['swap'],
-        memFree: 6
+        memFree: 5
       });
       configureDemoPlayer(orange, {
         hand: ['pollution', 'factorielle', 'ram', 'injection'],
+        discard: ['stack_spike'],
         memFree: 11
       });
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 4 — Nettoyer ou réparer une fonction cassée.',
-        'Joueur Cyan a cassé Quicksort Agressif : la fonction ne progresse plus mais occupe encore sa mémoire.',
-        'Hotfix répare la fonction avec son cadre initial seulement.',
-        'Collecte Incrémentale nettoie la fonction, libère toute sa mémoire, puis pioche 1 carte.',
-        'Débogueur pas à pas permet de dépiler le sommet sans effet.'
+        'Tour 1 — Joueur Cyan a lancé Quicksort Agressif avec R=3.',
+        'Tour 2 — Quicksort a empilé [2].',
+        'Tour 3 — Quicksort a atteint [0]. Une première perturbation a ajouté un parasite sans casser la fonction.',
+        'Tour 4 — Joueur Orange a joué Stack Spike sur une pile à 5 cadres. Le premier parasite a porté la pile à 6 cadres, le second aurait créé un 7e cadre : Quicksort a cassé.',
+        'Résultat — Quicksort est cassé : il ne progresse plus, ne rapporte aucun point, mais occupe encore 6 mémoire.',
+        'Choix actuel : Hotfix répare avec le cadre initial seul, Collecte nettoie et libère toute la mémoire, Débogueur dépile seulement le sommet.'
       ]);
       break;
 
@@ -1078,13 +1136,16 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 5 — Barrette RAM.',
-        'Joueur Cyan a deux fonctions actives et seulement 3 ML.',
-        'Barrette RAM coûte 3, reste en Hardware, puis augmente la mémoire totale et la mémoire libre de 4.',
+        'Tour précédent — Joueur Cyan a subi une perte de mémoire totale : sa capacité est descendue à 10.',
+        'Tour 3 — Mise à jour : Fonction Factorielle a empilé [1], puis Joueur Cyan est passé en phase de conception.',
+        'Tour 3 — Joueur Cyan vient de lancer Compactage Mémoire avec R=1, il ne lui reste que 3 mémoire libre.',
+        'Barrette RAM coûte exactement 3 : elle peut être installée, reste en Hardware, puis augmente la mémoire totale et la mémoire libre de 4.',
         'Objectif : jouer Barrette RAM puis observer la mémoire totale, la mémoire libre et la mémoire utilisée.'
       ]);
       break;
 
     case 'stack_spike_break':
+      game.turn = 6;
       configureDemoPlayer(cyan, {
         hand: ['stack_spike', 'injection', 'pollution', 'factorielle'],
         discard: ['purge'],
@@ -1101,9 +1162,11 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 6 — Casse avec Stack Spike.',
-        'Joueur Orange contrôle Tri Fusion Tempéré avec exactement 5 cadres.',
-        'Joueur Cyan a Stack Spike en main.',
-        'Objectif : jouer Stack Spike sur cette fonction. L’ajout de parasites force un overflow au 7e cadre et la fonction casse.'
+        'Tour 1 — Joueur Orange a lancé Tri Fusion Tempéré avec R=4.',
+        'Tours 2 à 5 — À chacune de ses mises à jour, Joueur Orange a empilé [3], puis [2], puis [1], puis [0].',
+        'État actuel — Tri Fusion Tempéré contient exactement 5 cadres : [4], [3], [2], [1], [0].',
+        'Tour 6 — Joueur Cyan est en phase de conception avec Stack Spike en main.',
+        'Objectif : jouer Stack Spike sur cette fonction. La première charge la ferait passer à 6 cadres, la seconde créerait un 7e cadre : la fonction casse immédiatement.'
       ]);
       break;
 
