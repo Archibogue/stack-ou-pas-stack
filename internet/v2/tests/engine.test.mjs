@@ -164,6 +164,38 @@ function assertRebootStopsActions() {
   assert.equal(player.hand.filter((card) => card.type !== 'Fonction').length, 2);
 }
 
+function assertInterruptsCanReactOnOpponentTurn() {
+  let state = engine.newGame('Ada', 'Grace');
+  let current = state.players[0];
+  let opponent = state.players[1];
+  current.hand = [createCard('tri_fusion')];
+  assert.equal(engine.playCard(0, current.hand[0].id, { R: 4 }), true);
+  const target = current.active[0];
+  target.frames = [4, 3, 2, 1, 0];
+  target.reachedZero = true;
+  target.nextValue = -1;
+  target.memUsed = 7;
+  current.memFree = 4;
+  opponent.hand = [createCard('stack_spike')];
+  opponent.memFree = 8;
+  state.phase = rules.PHASES.UPDATE;
+
+  assert.equal(engine.canPlayCard(1, opponent.hand[0].id), true, 'A non-active player can react with an Interrupt');
+  assert.equal(engine.playCard(1, opponent.hand[0].id, { functionId: target.id }), true);
+  assert.equal(target.broken, true, 'Opponent Stack Spike can break a function during the active player turn');
+  assert.equal(state.phase, rules.PHASES.UPDATE, 'Interrupts do not advance the active player phase');
+
+  state = engine.newGame('Ada', 'Grace');
+  current = state.players[0];
+  opponent = state.players[1];
+  current.hand = [createCard('factorielle')];
+  opponent.hand = [createCard('pollution')];
+  state.phase = rules.PHASES.UPDATE;
+  assert.equal(engine.canPlayCard(1, opponent.hand[0].id), false, 'A non-active player cannot play a Command as a reaction');
+  assert.equal(engine.playCard(1, opponent.hand[0].id), false);
+  assert.equal(engine.canPlayCard(0, current.hand[0].id), false, 'The active player cannot play a Function before conception');
+}
+
 function assertDrawRulesAndFunctionReplacement() {
   let state = engine.newGame('Ada', 'Grace');
   let player = state.players[0];
@@ -356,6 +388,7 @@ assertStructuredLog();
 assertUndo();
 assertPlanifierAndHotfix();
 assertRebootStopsActions();
+assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();
 assertEndTurnInActionPhase();
 assertDemoScenarios();

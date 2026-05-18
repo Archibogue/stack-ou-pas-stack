@@ -1028,6 +1028,134 @@ select {
   background: rgba(255, 255, 255, 0.06);
 }
 
+#arcade-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.arcade-effect {
+  --arcade: var(--cyan);
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: var(--arcade);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--arcade), transparent 44%));
+  transform: translate(-50%, -50%);
+  animation: arcadeFly 1.15s steps(8, end) both;
+}
+
+.arcade-effect.draw,
+.arcade-effect.deploy,
+.arcade-effect.stack,
+.arcade-effect.overclock {
+  --arcade: var(--cyan);
+}
+
+.arcade-effect.base,
+.arcade-effect.score,
+.arcade-effect.repair,
+.arcade-effect.unwind {
+  --arcade: var(--green);
+}
+
+.arcade-effect.hit,
+.arcade-effect.break,
+.arcade-effect.reboot {
+  --arcade: var(--red);
+}
+
+.arcade-effect.ram {
+  --arcade: var(--yellow);
+}
+
+.arcade-sprite {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 7px);
+  gap: 2px;
+  padding: 5px;
+  background: rgba(0, 0, 0, 0.44);
+  border: 1px solid color-mix(in srgb, var(--arcade), transparent 28%);
+}
+
+.arcade-sprite span {
+  width: 7px;
+  height: 7px;
+}
+
+.arcade-sprite span.on {
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.arcade-label {
+  border: 1px solid color-mix(in srgb, var(--arcade), transparent 20%);
+  background: rgba(0, 0, 0, 0.62);
+  color: var(--arcade);
+  padding: 3px 7px;
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.arcade-lasers {
+  position: absolute;
+  inset: -42px -34px;
+  pointer-events: none;
+}
+
+.arcade-lasers span {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 4px;
+  height: 38px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  transform: translateX(-50%);
+  animation: arcadeLaser 0.55s steps(4, end) both;
+}
+
+.arcade-lasers span:nth-child(1) {
+  margin-left: -22px;
+  animation-delay: 0.05s;
+}
+
+.arcade-lasers span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.arcade-lasers span:nth-child(3) {
+  margin-left: 22px;
+  animation-delay: 0.19s;
+}
+
+.arcade-sparks {
+  position: absolute;
+  inset: -28px;
+  pointer-events: none;
+}
+
+.arcade-sparks span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  transform: rotate(calc(var(--i) * 36deg)) translateY(0);
+  animation: arcadeSpark 0.7s steps(5, end) both;
+  animation-delay: calc(var(--i) * 18ms);
+}
+
 @keyframes pageIn {
   from {
     opacity: 0;
@@ -1136,6 +1264,50 @@ select {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arcadeFly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -42%) scale(0.75);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translate(-50%, -58%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -68%) scale(0.88);
+  }
+}
+
+@keyframes arcadeLaser {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -44px);
+  }
+}
+
+@keyframes arcadeSpark {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 36deg)) translateY(0) scale(0.6);
+  }
+  24% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 36deg)) translateY(42px) scale(0.2);
   }
 }
 

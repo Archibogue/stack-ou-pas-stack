@@ -21,6 +21,42 @@ const DEMO_SCENARIOS = [
   ['stack_spike_break', '6. Stack Spike']
 ];
 
+const ARCADE_SPRITES = {
+  ship: [
+    '00100',
+    '01110',
+    '11111',
+    '10101'
+  ],
+  invader: [
+    '10101',
+    '01110',
+    '11111',
+    '10101',
+    '01010'
+  ],
+  burst: [
+    '10001',
+    '01010',
+    '00100',
+    '01010',
+    '10001'
+  ],
+  ram: [
+    '11111',
+    '10101',
+    '11111',
+    '10101'
+  ],
+  repair: [
+    '00100',
+    '01100',
+    '11111',
+    '00110',
+    '00100'
+  ]
+};
+
 export async function initUI() {
   showHomeScreen();
   apiAvailable = await detectApi();
@@ -92,6 +128,7 @@ function showHomeScreen() {
     createElement('p', { textContent: 'Ordre de tour : mise à jour → pioche → conception → fin de tour. Les fonctions actives non cassées doivent être mises à jour pendant la phase de mise à jour.' }),
     createElement('ul', {}, [
       createElement('li', { textContent: 'La phase de pioche tire uniquement une carte Système ; une Fonction est piochée automatiquement quand une fonction se termine, ou pendant un reboot.' }),
+      createElement('li', { textContent: 'Les Interrupts se jouent aussi pendant le tour adverse, dès qu’une cible légale existe.' }),
       createElement('li', { textContent: 'Les cadres parasites comptent dans la pile et n’offrent aucun effet.' }),
       createElement('li', { textContent: 'Une fonction casse si elle doit recevoir un 7e cadre.' }),
       createElement('li', { textContent: 'Les Commandes/Interrupts sont payées et libèrent leur mémoire après résolution.' }),
@@ -172,11 +209,13 @@ async function joinServerGame() {
 function loadDemo(name) {
   loadDemoScenario(name);
   renderGameScreen();
+  spawnArcadeEffect('deploy', 'DEMO');
 }
 
 function undoAction() {
   if (!undoLastAction()) return;
   renderGameScreen();
+  spawnArcadeEffect('reboot', 'UNDO');
 }
 
 function renderGameScreen() {
@@ -332,8 +371,9 @@ function renderFunctionCard(player, fn) {
 
 function renderCard(player, card, index = 0) {
   const state = getState();
-  const enabled = canPlayCard() && state.currentPlayerIndex === player.index;
+  const enabled = canUseCardFromHand(player, card);
   const typeClass = cardTypeClass(card.type);
+  const actionLabel = card.type === 'Interrupt' && state.currentPlayerIndex !== player.index ? 'Interrompre' : 'Jouer';
   const children = [
     createElement('div', { className: 'card-top' }, [
       createElement('span', { className: `type-badge ${typeClass}`, textContent: card.type }),
@@ -345,10 +385,16 @@ function renderCard(player, card, index = 0) {
       : null,
     createElement('div', { className: 'desc', textContent: card.description }),
     createElement('div', { className: 'card-actions' }, [
-      createElement('button', { onclick: () => playCardAction(player.index, card.id), disabled: !enabled }, ['Jouer'])
+      createElement('button', { onclick: () => playCardAction(player.index, card.id), disabled: !enabled }, [actionLabel])
     ])
   ];
   return createElement('article', { className: `card ${typeClass}`, style: `--i:${index}` }, children);
+}
+
+function canUseCardFromHand(player, card) {
+  if (!canPlayCard(player.index, card.id)) return false;
+  const targetChoices = getTargetChoices(player.index, card);
+  return targetChoices === null || targetChoices.length > 0;
 }
 
 function renderCenterPanel(state) {
@@ -362,24 +408,40 @@ function renderCenterPanel(state) {
 
   buttons.push(createElement('button', {
     className: 'primary',
-    onclick: () => { validateUpdatePhase(); renderGameScreen(); },
+    onclick: () => {
+      const changed = validateUpdatePhase();
+      renderGameScreen();
+      if (changed) spawnArcadeEffect('draw', 'NEXT');
+    },
     disabled: state.phase !== PHASES.UPDATE || pendingUpdates > 0 || state.winner !== null
   }, ['Valider mise à jour']));
 
   buttons.push(createElement('button', {
-    onclick: () => { drawForPlayer('system'); renderGameScreen(); },
+    onclick: () => {
+      const card = drawForPlayer('system');
+      renderGameScreen();
+      if (card) spawnArcadeEffect('draw', 'DRAW');
+    },
     disabled: state.phase !== PHASES.DRAW || state.winner !== null
   }, ['Piocher Système']));
 
   buttons.push(createElement('button', {
     className: 'warn',
-    onclick: () => { endTurn(); renderGameScreen(); },
+    onclick: () => {
+      const ended = endTurn();
+      renderGameScreen();
+      if (ended) spawnArcadeEffect('draw', 'TURN');
+    },
     disabled: !canEndTurn()
   }, ['Fin de tour']));
 
   buttons.push(createElement('button', {
     className: 'bad',
-    onclick: () => { rebootCurrentPlayer(); renderGameScreen(); },
+    onclick: () => {
+      const rebooted = rebootCurrentPlayer();
+      renderGameScreen();
+      if (rebooted) spawnArcadeEffect('reboot', 'REBOOT');
+    },
     disabled: state.phase !== PHASES.ACTION || state.winner !== null || currentPlayer.rebootedThisTurn
   }, ['Reboot volontaire']));
 
@@ -417,6 +479,7 @@ function renderHelpPanel() {
     createElement('p', { textContent: 'Ce jeu met en œuvre la variante d’initiation quadratique avec mémoire 11, victoire à 11, et overflow au 7e cadre.' }),
     createElement('ul', {}, [
       createElement('li', { textContent: 'Fonctions actives non cassées = mise à jour obligatoire.' }),
+      createElement('li', { textContent: 'Les Interrupts peuvent être jouées pendant le tour adverse si leur condition est remplie.' }),
       createElement('li', { textContent: 'Pas de pioche libre dans la pile Fonctions : remplacement automatique à la terminaison, ou reboot.' }),
       createElement('li', { textContent: 'Les fonctions cassées restent en jeu et occupent de la mémoire.' }),
       createElement('li', { textContent: 'Nettoyer libère la mémoire et défausse la fonction.' }),
@@ -474,18 +537,39 @@ function phaseClass(phase) {
 function drawPileButton(playerIndex, deckType) {
   const current = getState().currentPlayerIndex;
   if (playerIndex !== current) return;
-  drawForPlayer(deckType);
+  const card = drawForPlayer(deckType);
   renderGameScreen();
+  if (card) spawnArcadeEffect('draw', 'DRAW');
 }
 
 function applyUpdate(functionId) {
-  updateFunction(functionId);
+  const state = getState();
+  const beforeOwner = state.players.find((player) => player.active.some((fn) => fn.id === functionId));
+  const before = beforeOwner?.active.find((fn) => fn.id === functionId);
+  const beforeFrames = before ? before.frames.length : 0;
+  const wasUnwinding = Boolean(before?.reachedZero);
+  const updated = updateFunction(functionId);
   renderGameScreen();
+  if (!updated || !beforeOwner || !before) return;
+  const afterOwner = getState().players.find((player) => player.index === beforeOwner.index);
+  const after = afterOwner?.active.find((fn) => fn.id === functionId);
+  if (!after) {
+    spawnArcadeEffect('score', 'SCORE');
+  } else if (after.broken) {
+    spawnArcadeEffect('break', 'CRASH');
+  } else if (!wasUnwinding && after.reachedZero) {
+    spawnArcadeEffect('base', '[0]');
+  } else if (after.frames.length > beforeFrames) {
+    spawnArcadeEffect('stack', 'STACK');
+  } else {
+    spawnArcadeEffect('unwind', 'POP');
+  }
 }
 
 function applyOverclock(functionId) {
-  useOverclock(functionId);
+  const used = useOverclock(functionId);
   renderGameScreen();
+  if (used) spawnArcadeEffect('overclock', '2X');
 }
 
 async function playCardAction(playerIndex, cardId) {
@@ -502,8 +586,33 @@ async function playCardAction(playerIndex, cardId) {
     if (!selected) return;
     targetData.functionId = selected;
   }
-  playCard(playerIndex, cardId, targetData);
+  const played = playCard(playerIndex, cardId, targetData);
   renderGameScreen();
+  if (played) spawnCardEffect(card);
+}
+
+function spawnCardEffect(card) {
+  if (card.type === 'Fonction') {
+    spawnArcadeEffect('deploy', 'RUN');
+    return;
+  }
+  if (card.key === 'ram') {
+    spawnArcadeEffect('ram', 'RAM +4');
+    return;
+  }
+  if (card.key === 'overclock' || card.key === 'planificateur') {
+    spawnArcadeEffect('overclock', 'BOOST');
+    return;
+  }
+  if (['stack_spike', 'injection', 'pollution', 'swap'].includes(card.key)) {
+    spawnArcadeEffect('hit', 'HIT');
+    return;
+  }
+  if (['hotfix', 'collecte', 'purge', 'debug'].includes(card.key)) {
+    spawnArcadeEffect('repair', 'FIX');
+    return;
+  }
+  spawnArcadeEffect('draw', 'OK');
 }
 
 function getTargetChoices(playerIndex, card) {
@@ -579,4 +688,55 @@ export function showModal(title, content, actions = []) {
 export function hideModal() {
   modal.classList.add('hidden');
   modal.innerHTML = '';
+}
+
+function spawnArcadeEffect(kind, label) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const layer = getArcadeLayer();
+  const spriteName = spriteForEffect(kind);
+  const effect = createElement('div', {
+    className: `arcade-effect ${kind}`,
+    style: `--x:${20 + Math.random() * 60}vw; --y:${18 + Math.random() * 54}vh;`,
+    'aria-hidden': 'true'
+  }, [
+    createPixelSprite(spriteName),
+    createElement('div', { className: 'arcade-label', textContent: label }),
+    createElement('div', { className: 'arcade-lasers' }, [
+      createElement('span'),
+      createElement('span'),
+      createElement('span')
+    ]),
+    createElement('div', { className: 'arcade-sparks' }, Array.from({ length: 10 }, (_, index) => (
+      createElement('span', { style: `--i:${index}` })
+    )))
+  ]);
+  layer.appendChild(effect);
+  window.setTimeout(() => effect.remove(), 1400);
+}
+
+function getArcadeLayer() {
+  let layer = document.getElementById('arcade-layer');
+  if (!layer) {
+    layer = createElement('div', { id: 'arcade-layer', 'aria-hidden': 'true' });
+    document.body.appendChild(layer);
+  }
+  return layer;
+}
+
+function spriteForEffect(kind) {
+  if (['hit', 'break'].includes(kind)) return 'invader';
+  if (kind === 'ram') return 'ram';
+  if (kind === 'repair') return 'repair';
+  if (['score', 'base'].includes(kind)) return 'burst';
+  return 'ship';
+}
+
+function createPixelSprite(name) {
+  const rows = ARCADE_SPRITES[name] || ARCADE_SPRITES.ship;
+  return createElement('div', {
+    className: `arcade-sprite sprite-${name}`,
+    style: `--cols:${rows[0].length}`
+  }, rows.flatMap((row) => row.split('').map((cell) => (
+    createElement('span', { className: cell === '1' ? 'on' : '' })
+  ))));
 }

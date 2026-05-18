@@ -34,7 +34,7 @@ Chaque tour suit obligatoirement cet ordre :
 3. **Phase de conception** : le joueur peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.
 4. **Fin de tour** : les effets temporaires cessent.
 
-Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts quand leur condition de réaction est explicitement remplie.
+Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts. Une Interrupt peut être jouée pendant le tour adverse quand sa condition de réaction est explicitement remplie et qu’une cible légale existe.
 
 La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.
 

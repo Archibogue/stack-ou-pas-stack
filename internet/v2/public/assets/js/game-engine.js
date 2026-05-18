@@ -280,9 +280,16 @@ function loseMemory(player, amount) {
   clampMemory(player);
 }
 
-export function canPlayCard() {
-  const player = gameState ? getCurrentPlayer() : null;
-  return gameState.phase === PHASES.ACTION && gameState.winner === null && !player?.rebootedThisTurn;
+export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId = null) {
+  if (!gameState || gameState.winner !== null) return false;
+  const player = gameState.players[playerIndex];
+  if (!player || player.rebootedThisTurn) return false;
+  const card = cardId ? player.hand.find((item) => item.id === cardId) : null;
+  if (card && player.memFree < card.cost) return false;
+  if (player.index === gameState.currentPlayerIndex) {
+    return gameState.phase === PHASES.ACTION;
+  }
+  return card?.type === 'Interrupt';
 }
 
 export function canEndTurn() {
@@ -732,11 +739,14 @@ export function endTurn() {
 
 export function playCard(playerIndex, cardId, targetData = {}) {
   const player = gameState.players[playerIndex];
-  if (gameState.phase !== PHASES.ACTION || gameState.winner !== null || player.index !== gameState.currentPlayerIndex || player.rebootedThisTurn) {
+  if (!player || gameState.winner !== null || player.rebootedThisTurn) {
     return false;
   }
   const card = player.hand.find((item) => item.id === cardId);
   if (!card) return false;
+  const ownAction = player.index === gameState.currentPlayerIndex && gameState.phase === PHASES.ACTION;
+  const interruptReaction = player.index !== gameState.currentPlayerIndex && card.type === 'Interrupt';
+  if (!ownAction && !interruptReaction) return false;
   const undoPoint = createUndoPoint();
   let result = false;
   if (card.type === 'Fonction') {
@@ -801,7 +811,7 @@ function playSystemCard(player, card, targetData) {
     return false;
   }
   let resolved = true;
-  logAction(gameState, `${player.name} joue ${card.name} : début de résolution.`, 'sys');
+  logAction(gameState, `${player.name} joue ${card.name} : début de résolution.`, 'sys', { player: player.name });
   switch (card.key) {
     case 'hotfix':
       resolved = repairFunction(player, targetData.functionId);
@@ -836,11 +846,11 @@ function playSystemCard(player, card, targetData) {
       break;
   }
   if (!resolved) {
-    logAction(gameState, `${card.name} n’est pas résolue : aucune carte n’est défaussée.`, 'warn');
+    logAction(gameState, `${card.name} n’est pas résolue : aucune carte n’est défaussée.`, 'warn', { player: player.name });
     return false;
   }
   discardCardFromHand(player, card.id, true);
-  logAction(gameState, `${card.name} est résolue et rejoint la défausse.`, 'sys');
+  logAction(gameState, `${card.name} est résolue et rejoint la défausse.`, 'sys', { player: player.name });
   return true;
 }
 
