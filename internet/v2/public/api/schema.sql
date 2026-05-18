@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS `games` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `code` CHAR(6) NOT NULL UNIQUE,
+  `state_json` JSON NOT NULL,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

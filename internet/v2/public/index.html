@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stack ou pas Stack — V2</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <div id="app" class="app"></div>
+  <div id="modal" class="modal hidden"></div>
+  <noscript><div style="padding:24px; margin:24px; border-radius:18px; background:#111; color:#fff; border:1px solid rgba(255,255,255,0.15);">JavaScript est requis pour afficher l’interface. Activez JavaScript et rechargez la page.</div></noscript>
+  <script type="module" src="assets/js/app.js"></script>
+  <script>
+    window.setTimeout(function () {
+      var app = document.getElementById('app');
+      if (!app || app.textContent.trim() || app.children.length > 0) return;
+      app.innerHTML = '<div style="padding:24px; margin:32px auto; max-width:760px; border-radius:18px; background:rgba(0,0,0,0.62); color:#fff; border:1px solid rgba(255,255,255,0.16);"><h1>Interface non chargée</h1><p>Si vous avez ouvert ce fichier directement depuis l’explorateur, lancez plutôt la V2 depuis un serveur local : <code>php -S 127.0.0.1:8765 -t internet/v2/public</code>, puis ouvrez <code>http://127.0.0.1:8765/</code>.</p></div>';
+    }, 1800);
+  </script>
+</body>
+</html>

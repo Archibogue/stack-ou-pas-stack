@@ -30,9 +30,10 @@ Paramètres principaux :
 
 Dossier : [`internet/`](internet/)
 
-Cette partie contient une version jouable en navigateur, dans un seul fichier HTML.
+Cette partie contient une version jouable en navigateur.
 
-Pour tester : ouvrir `internet/index.html`.
+- V1 reste disponible dans `internet/index.html`.
+- V2 est disponible dans `internet/v2/public/index.html` : architecture séparée, moteur centralisé, sauvegarde locale et API PHP optionnelle.
 
 La V1.1 impose l’ordre obligatoire d’un tour :
 
@@ -51,7 +52,17 @@ stack-ou-pas-stack/
 │   ├── impression/
 │   └── archives-v5/
 ├── internet/
-│   └── index.html
+│   ├── index.html
+│   └── v2/
+│       ├── public/
+│       │   ├── assets/
+│       │   │   ├── css/
+│       │   │   └── js/
+│       │   ├── api/
+│       │   └── index.html
+│       ├── tests/
+│       ├── README.md
+│       └── CHANGELOG.md
 ├── docs/
 │   └── ROADMAP.md
 ├── README.md
