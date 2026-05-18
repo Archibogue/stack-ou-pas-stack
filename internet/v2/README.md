@@ -42,7 +42,7 @@ Les tests restent volontairement simples et sans framework externe :
 node internet/v2/tests/engine.test.mjs
 ```
 
-Ils vérifient les constantes de règles, la composition du deck par rapport au Markdown physique, la main de départ, le cycle mémoire des fonctions, le Planificateur local, Hotfix et le reboot volontaire.
+Ils vérifient les constantes de règles, la composition du deck par rapport au Markdown physique, la main de départ, la pioche Système, le remplacement automatique des Fonctions terminées, le cycle mémoire des fonctions, le Planificateur local, Hotfix et le reboot volontaire.
 
 ## Tester avec API PHP/MySQL
 
@@ -56,8 +56,10 @@ Ils vérifient les constantes de règles, la composition du deck par rapport au 
 
 - Démarrer une partie locale.
 - Respecter l’ordre des phases : mise à jour → pioche → conception → fin de tour.
+- Vérifier que la pioche de tour tire une carte Système, pas une nouvelle Fonction.
 - Lancer une fonction et atteindre [0].
 - Dépiler le cas de base puis terminer une fonction.
+- Vérifier qu’une Fonction terminée déclenche une pioche automatique de remplacement.
 - Déclencher un overflow sur le 7e cadre.
 - Nettoyer une fonction cassée.
 - Sauvegarder et recharger en local.

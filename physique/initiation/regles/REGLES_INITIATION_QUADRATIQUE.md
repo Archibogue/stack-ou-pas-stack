@@ -30,11 +30,13 @@ Le premier joueur ne pioche pas au premier tour.
 Chaque tour suit obligatoirement cet ordre :
 
 1. **Phase de mise à jour** : toutes les fonctions actives non cassées du joueur actif sont mises à jour, dans l’ordre choisi par ce joueur.
-2. **Phase de pioche** : le joueur pioche 1 carte dans la pile Fonctions ou dans la pile Système.
+2. **Phase de pioche** : le joueur pioche 1 carte dans la pile Système.
 3. **Phase de conception** : le joueur peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.
 4. **Fin de tour** : les effets temporaires cessent.
 
 Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts quand leur condition de réaction est explicitement remplie.
+
+La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.
 
 ## Fonctionnement des fonctions
 
@@ -59,7 +61,8 @@ Quand une fonction se termine :
 2. elle ajoute le bonus `B(R)=R²` ;
 3. elle applique son effet de terminaison ;
 4. elle libère sa mémoire ;
-5. elle va en défausse.
+5. elle va en défausse ;
+6. son contrôleur pioche automatiquement 1 nouvelle carte Fonction, si possible.
 
 ## Bonus quadratique
 
@@ -102,4 +105,4 @@ Pendant sa phase de conception, un joueur peut effectuer un reboot volontaire à
 - il libère la mémoire occupée par les fonctions ;
 - il défausse sa main ;
 - il remélange sa défausse dans les deux piles selon le type des cartes ;
-- il repioche 5 cartes si possible.
+- il repioche une main de départ si possible : 3 cartes Fonctions et 2 cartes Système.

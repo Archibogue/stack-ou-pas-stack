@@ -14,7 +14,7 @@ const PHASE_STEPS = [
 
 const DEMO_SCENARIOS = [
   ['depth_choice', '1. Choix profondeur'],
-  ['base_not_end', '2. Cas de base'],
+  ['base_not_end', '2. Cas de base ≠ fin'],
   ['strategic_memory', '3. Choix mémoire'],
   ['repair_or_clean', '4. Nettoyer / réparer'],
   ['ram', '5. Barrette RAM'],
@@ -91,6 +91,7 @@ function showHomeScreen() {
     createElement('h2', { textContent: 'Rappel rapide' }),
     createElement('p', { textContent: 'Ordre de tour : mise à jour → pioche → conception → fin de tour. Les fonctions actives non cassées doivent être mises à jour pendant la phase de mise à jour.' }),
     createElement('ul', {}, [
+      createElement('li', { textContent: 'La phase de pioche tire uniquement une carte Système ; une Fonction est piochée automatiquement quand une fonction se termine, ou pendant un reboot.' }),
       createElement('li', { textContent: 'Les cadres parasites comptent dans la pile et n’offrent aucun effet.' }),
       createElement('li', { textContent: 'Une fonction casse si elle doit recevoir un 7e cadre.' }),
       createElement('li', { textContent: 'Les Commandes/Interrupts sont payées et libèrent leur mémoire après résolution.' }),
@@ -241,10 +242,6 @@ function renderPlayerPanel(player) {
         ]),
         createElement('div', { className: 'phase-actions' }, [
           createElement('button', {
-            onclick: () => { drawPileButton(player.index, 'functions'); },
-            disabled: !(state.phase === PHASES.DRAW && state.currentPlayerIndex === player.index && state.winner === null)
-          }, ['Piocher Fonctions']),
-          createElement('button', {
             onclick: () => { drawPileButton(player.index, 'system'); },
             disabled: !(state.phase === PHASES.DRAW && state.currentPlayerIndex === player.index && state.winner === null)
           }, ['Piocher Système'])
@@ -360,7 +357,7 @@ function renderCenterPanel(state) {
   const phaseText = state.phase === PHASES.UPDATE
     ? pendingUpdates > 0 ? `Phase de mise à jour : ${pendingUpdates} fonction(s) restantes` : 'Mise à jour terminée'
     : state.phase === PHASES.DRAW
-      ? 'Phase de pioche : choisissez une pile' : state.phase === PHASES.ACTION ? 'Phase de conception' : 'Partie terminée';
+      ? 'Phase de pioche : carte Système uniquement' : state.phase === PHASES.ACTION ? 'Phase de conception' : 'Partie terminée';
   const buttons = [];
 
   buttons.push(createElement('button', {
@@ -370,9 +367,9 @@ function renderCenterPanel(state) {
   }, ['Valider mise à jour']));
 
   buttons.push(createElement('button', {
-    onclick: () => { alert('Sélectionnez la pile depuis le panneau du joueur actif.'); },
+    onclick: () => { drawForPlayer('system'); renderGameScreen(); },
     disabled: state.phase !== PHASES.DRAW || state.winner !== null
-  }, ['Choisir pile']));
+  }, ['Piocher Système']));
 
   buttons.push(createElement('button', {
     className: 'warn',
@@ -420,6 +417,7 @@ function renderHelpPanel() {
     createElement('p', { textContent: 'Ce jeu met en œuvre la variante d’initiation quadratique avec mémoire 11, victoire à 11, et overflow au 7e cadre.' }),
     createElement('ul', {}, [
       createElement('li', { textContent: 'Fonctions actives non cassées = mise à jour obligatoire.' }),
+      createElement('li', { textContent: 'Pas de pioche libre dans la pile Fonctions : remplacement automatique à la terminaison, ou reboot.' }),
       createElement('li', { textContent: 'Les fonctions cassées restent en jeu et occupent de la mémoire.' }),
       createElement('li', { textContent: 'Nettoyer libère la mémoire et défausse la fonction.' }),
       createElement('li', { textContent: 'Réparer remet la fonction en état selon le texte de la carte.' })

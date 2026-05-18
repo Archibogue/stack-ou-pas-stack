@@ -56,10 +56,12 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
 }
 
 export function dealStartingHands(game) {
-  game.players.forEach((player) => {
-    for (let i = 0; i < 3; i += 1) drawFromDeck(player, 'functions', true);
-    for (let i = 0; i < 2; i += 1) drawFromDeck(player, 'system', true);
-  });
+  game.players.forEach(drawStartingHand);
+}
+
+export function drawStartingHand(player) {
+  for (let i = 0; i < 3; i += 1) drawFromDeck(player, 'functions', true);
+  for (let i = 0; i < 2; i += 1) drawFromDeck(player, 'system', true);
 }
 
 export function drawFromDeck(player, deckType, free = false) {

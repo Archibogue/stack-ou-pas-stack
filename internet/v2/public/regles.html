@@ -104,10 +104,11 @@
       <h2>4. Ordre d’un tour</h2>
       <ol>
         <li><strong>Phase de mise à jour</strong> : le joueur actif met à jour toutes ses fonctions actives non cassées, dans l’ordre de son choix.</li>
-        <li><strong>Phase de pioche</strong> : il pioche 1 carte dans la pile Fonctions ou dans la pile Système. Le premier joueur saute cette phase au tout premier tour.</li>
+        <li><strong>Phase de pioche</strong> : il pioche 1 carte dans la pile Système. Le premier joueur saute cette phase au tout premier tour.</li>
         <li><strong>Phase de conception</strong> : il peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.</li>
         <li><strong>Fin de tour</strong> : les effets temporaires cessent, puis le tour passe à l’autre joueur.</li>
       </ol>
+      <p>On ne peut pas tirer librement une nouvelle Fonction pendant la phase de pioche. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.</p>
       <p>Les fonctions actives non cassées doivent toutes être mises à jour avant de passer à la pioche. Une carte ne peut pas être jouée avant la phase de conception, sauf si une règle d’Interrupt précise explicitement une réaction.</p>
       <p>Dans la V2 web locale, les Interrupts sont résolus depuis l’interface de conception afin de garder le hot-seat simple. Une vraie pile de réaction est prévue comme évolution.</p>
     </section>
@@ -133,7 +134,7 @@
         <li>si la fonction n’a pas encore atteint <code>[0]</code>, elle empile le cadre suivant ;</li>
         <li>si elle a déjà atteint <code>[0]</code>, elle dépile le cadre du sommet.</li>
       </ul>
-      <p>Le cadre <code>[0]</code> déclenche le cas de base. Les cadres supérieurs à <code>[0]</code> déclenchent les effets de remontée. La fonction se termine seulement quand son cadre initial est dépilé et que sa pile devient vide.</p>
+      <p>Le cadre <code>[0]</code> déclenche le cas de base. Les cadres supérieurs à <code>[0]</code> déclenchent les effets de remontée. La fonction se termine seulement quand son cadre initial est dépilé et que sa pile devient vide. Quand elle se termine, son contrôleur pioche automatiquement 1 nouvelle Fonction, si possible.</p>
       <h3>Bonus quadratique</h3>
       <table class="rules-table">
         <thead><tr><th>R</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
@@ -184,7 +185,7 @@
         <li>Ses Hardware restent en jeu et continuent d’occuper leur mémoire.</li>
         <li>Il défausse toute sa main.</li>
         <li>Il remélange sa défausse dans les deux piles selon les types : Fonctions avec Fonctions, Système avec Système.</li>
-        <li>Il repioche 5 cartes si possible.</li>
+        <li>Il repioche une main de départ si possible : 3 cartes Fonctions et 2 cartes Système.</li>
         <li>Il ne peut jouer aucune autre carte ce tour-ci.</li>
       </ol>
     </section>

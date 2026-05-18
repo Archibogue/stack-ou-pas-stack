@@ -160,11 +160,63 @@ function assertRebootStopsActions() {
   assert.equal(engine.canPlayCard(), false, 'No card can be played after a voluntary reboot this turn');
   assert.equal(player.active.length, 0);
   assert.equal(player.hand.length, 5);
+  assert.equal(player.hand.filter((card) => card.type === 'Fonction').length, 3);
+  assert.equal(player.hand.filter((card) => card.type !== 'Fonction').length, 2);
+}
+
+function assertDrawRulesAndFunctionReplacement() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  state.phase = rules.PHASES.DRAW;
+  const functionsBeforeManualDraw = player.functionsDeck.length;
+  const systemsBeforeManualDraw = player.systemDeck.length;
+
+  assert.equal(engine.drawForPlayer('functions'), null, 'The draw phase cannot draw a new Function');
+  assert.equal(state.phase, rules.PHASES.DRAW);
+  assert.equal(player.functionsDeck.length, functionsBeforeManualDraw);
+
+  const systemCard = engine.drawForPlayer('system');
+  assert.ok(systemCard, 'The draw phase draws from the System deck');
+  assert.notEqual(systemCard.type, 'Fonction');
+  assert.equal(player.functionsDeck.length, functionsBeforeManualDraw);
+  assert.equal(player.systemDeck.length, systemsBeforeManualDraw - 1);
+  assert.equal(state.phase, rules.PHASES.ACTION);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 0 }), true);
+  const func = player.active[0];
+  const functionsBeforeCompletion = player.functionsDeck.length;
+  const systemsBeforeCompletion = player.systemDeck.length;
+
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(func.id), true);
+  assert.equal(player.active.length, 0);
+  assert.equal(player.functionsDeck.length, functionsBeforeCompletion - 1, 'Completing a function draws exactly one replacement Function');
+  assert.equal(player.hand.filter((card) => card.type === 'Fonction').length, 1);
+  assert.equal(player.systemDeck.length, systemsBeforeCompletion - 1, 'Factorielle base case draws from the System deck');
+}
+
+function assertEndTurnInActionPhase() {
+  let state = engine.loadDemoScenario('ram');
+  assert.equal(state.phase, rules.PHASES.ACTION);
+  assert.equal(engine.canEndTurn(), true, 'Action demos with active functions can still end the turn');
+
+  state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 2 }), true);
+  assert.equal(engine.canEndTurn(), true, 'A function launched during action phase waits until next update phase');
 }
 
 function assertRulesConstants() {
   const markdown = readFileSync(resolve(repoRoot, 'physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md'), 'utf8');
   assert.match(markdown, /Mémoire de départ.+11 mémoire totale \/ 11 mémoire libre/);
+  assert.match(markdown, /La phase de pioche ne permet pas de tirer une nouvelle Fonction/);
+  assert.match(markdown, /reboot qui redonne une main de départ/);
   assert.equal(rules.START_MEMORY, 11);
   assert.equal(rules.WIN_SCORE, 11);
   assert.equal(rules.MAX_FRAMES_PER_FUNCTION, 6);
@@ -231,6 +283,8 @@ function assertDemoScenarios() {
     assert.notEqual(state.phase, rules.PHASES.GAME_OVER, `${scenario} should be playable`);
     assert.equal(state.turn, expectedTurns[scenario], `${scenario} should use a plausible turn number`);
     assert.ok(state.log.length >= 5, `${scenario} should include a readable route to the situation`);
+    assert.ok(state.log.some((entry) => entry.text.includes('Position d’analyse')), `${scenario} should describe the teaching position`);
+    assert.ok(state.log.some((entry) => entry.text.includes('Question pour la classe')), `${scenario} should end with a student-facing question`);
     state.players.forEach((player) => {
       assert.ok(player.memFree >= 0 && player.memFree <= player.memTotal + player.tempMemory, `${scenario}: ${player.name} memory must be legal`);
       player.active.forEach(assertFunctionStateCoherence);
@@ -238,8 +292,14 @@ function assertDemoScenarios() {
     });
   });
 
-  let state = engine.loadDemoScenario('base_not_end');
+  let state = engine.loadDemoScenario('depth_choice');
   let cyan = state.players[0];
+  const factorielleToLaunch = cyan.hand.find((card) => card.key === 'factorielle');
+  assert.equal(engine.playCard(0, factorielleToLaunch.id, { R: 3 }), true);
+  assert.equal(cyan.active.some((func) => func.cardKey === 'factorielle' && func.R === 3), true);
+
+  state = engine.loadDemoScenario('base_not_end');
+  cyan = state.players[0];
   assert.equal(engine.updateFunction(cyan.active[0].id), true);
   assert.equal(cyan.active.length, 1, 'Base case should not complete the function');
   assert.deepEqual(cyan.active[0].frames, [2, 1]);
@@ -248,10 +308,28 @@ function assertDemoScenarios() {
   cyan = state.players[0];
   const compactage = cyan.active.find((func) => func.cardKey === 'compactage');
   const factorielle = cyan.active.find((func) => func.cardKey === 'factorielle');
+  assert.equal(cyan.memTotal, 11);
   assert.equal(cyan.memFree, 1);
+  assert.deepEqual(factorielle.frames, [2, 1]);
+  assert.equal(factorielle.reachedZero, false);
+  assert.deepEqual(compactage.frames, [1]);
+  assert.equal(compactage.reachedZero, false);
+  assert.match(engine.getNextFunctionEffect(factorielle).text, /empile \[0\]/);
+  assert.match(engine.getNextFunctionEffect(compactage).text, /empile \[0\]/);
   assert.equal(engine.updateFunction(compactage.id), true);
-  assert.ok(cyan.memFree >= 2, 'Compactage base case should create breathing room');
+  assert.deepEqual(compactage.frames, [1, 0]);
+  assert.equal(cyan.memFree, 0);
   assert.equal(engine.updateFunction(factorielle.id), true);
+  assert.equal(factorielle.broken, true, 'The second one-step-from-base function breaks if no memory remains');
+
+  state = engine.loadDemoScenario('repair_or_clean');
+  cyan = state.players[0];
+  const broken = cyan.active[0];
+  const hotfix = cyan.hand.find((card) => card.key === 'hotfix');
+  assert.equal(engine.playCard(0, hotfix.id, { functionId: broken.id }), true);
+  assert.equal(broken.broken, false);
+  assert.deepEqual(broken.frames, [3]);
+  assert.ok(cyan.memFree > 5, 'Repairing should free the recursive frames that were stuck in memory');
 
   state = engine.loadDemoScenario('ram');
   cyan = state.players[0];
@@ -278,6 +356,8 @@ assertStructuredLog();
 assertUndo();
 assertPlanifierAndHotfix();
 assertRebootStopsActions();
+assertDrawRulesAndFunctionReplacement();
+assertEndTurnInActionPhase();
 assertDemoScenarios();
 
 console.log('V2 engine tests ok');

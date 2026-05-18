@@ -1,4 +1,4 @@
-import { createGameState, drawFromDeck, createFunctionFrame, restoreState, cloneStateForSave } from './game-state.js';
+import { createGameState, drawFromDeck, drawStartingHand, createFunctionFrame, restoreState, cloneStateForSave } from './game-state.js';
 import { CARD_DEFINITIONS, DECK_COMPOSITION, createCard } from './cards.js';
 import { MAX_FRAMES_PER_FUNCTION, PHASES, bonusRecursion, isWinningState } from './rules.js';
 import { saveLocalState, exportStateToClipboard, importStateFromJson, saveRemoteGame } from './storage.js';
@@ -287,24 +287,30 @@ export function canPlayCard() {
 
 export function canEndTurn() {
   if (gameState.winner !== null) return false;
-  if (gameState.phase !== PHASES.ACTION) return false;
-  const player = getCurrentPlayer();
-  const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
-  return pending.length === 0 && gameState.phase !== PHASES.DRAW;
+  return gameState.phase === PHASES.ACTION;
 }
 
 export function drawForPlayer(deckType) {
   if (gameState.phase !== PHASES.DRAW || gameState.winner !== null) return null;
-  const undoPoint = createUndoPoint();
-  const player = getCurrentPlayer();
-  const card = drawFromDeck(player, deckType);
-  if (!card) {
-    const changed = handleDeckExhaustion(player);
-    if (changed) persistGameState();
-    else discardUndoPoint(undoPoint);
+  if (deckType !== 'system') {
+    logAction(gameState, 'La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction arrive automatiquement quand une fonction se termine, ou pendant un reboot.', 'warn');
+    persistGameState();
     return null;
   }
-  logAction(gameState, `${player.name} pioche dans la pile ${deckType === 'functions' ? 'Fonctions' : 'Système'} et reçoit ${card.name}.`);
+  const undoPoint = createUndoPoint();
+  const player = getCurrentPlayer();
+  const card = drawFromDeck(player, 'system');
+  if (!card) {
+    const changed = handleDeckExhaustion(player);
+    if (!changed) logAction(gameState, `${player.name} ne peut pas piocher : la pile Système est vide.`, 'warn');
+    if (gameState.phase !== PHASES.GAME_OVER) {
+      gameState.phase = PHASES.ACTION;
+      logAction(gameState, 'Phase de conception commencée sans nouvelle carte Système.', 'sys');
+    }
+    persistGameState();
+    return null;
+  }
+  logAction(gameState, `${player.name} pioche dans la pile Système et reçoit ${card.name}.`);
   gameState.phase = PHASES.ACTION;
   persistGameState();
   return card;
@@ -416,14 +422,14 @@ function applyBaseEffect(player, func) {
     case 'glouton':
     case 'quicksort':
     case 'expansion':
-      logAction(gameState, `${func.name} — cas de base : ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
+      logAction(gameState, `${func.name} — cas de base : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'compactage':
       releaseMemory(player, 1);
       logAction(gameState, `${func.name} — cas de base : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — cas de base : révèle puis prend ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
+      logAction(gameState, `${func.name} — cas de base : révèle puis prend ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'sentinelle':
       logAction(gameState, `${func.name} — cas de base : ${player.name} regarde le dessus d’une pile.`, 'sys');
@@ -474,6 +480,7 @@ function completeFunction(player, func) {
   applyTerminalEffect(player, func, bonus);
   func.memUsed = Math.min(func.memUsed, func.cost);
   releaseMemory(player, func.memUsed);
+  drawReplacementFunction(player, func);
   player.completedThisTurn = true;
 }
 
@@ -486,7 +493,7 @@ function applyTerminalEffect(player, func, bonus) {
       logAction(gameState, `${func.name} — effet de terminaison : ${player.name} gagne ${bonus} mémoire libre.`, 'good');
       break;
     case 'sentinelle':
-      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus))}.`, 'good');
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, bonus))}.`, 'good');
       break;
     case 'glouton':
       addParasitesToPlayer(opponent, bonus);
@@ -496,7 +503,7 @@ function applyTerminalEffect(player, func, bonus) {
       logAction(gameState, `${func.name} — effet de terminaison : ${opponent.name} perd ${bonus} mémoire libre.`, 'bad');
       break;
     case 'archiviste':
-      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus))}.`, 'good');
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, bonus))}.`, 'good');
       if (player.hand.length > 0) discardCardFromHand(player, player.hand[0].id, true);
       logAction(gameState, `${func.name} — effet de terminaison : ${player.name} défausse 1 carte après la pioche.`, 'sys');
       break;
@@ -505,10 +512,10 @@ function applyTerminalEffect(player, func, bonus) {
       break;
     case 'compactage':
       cleanBrokenFunction(player);
-      if (bonus >= 2) logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, 1))}.`, 'good');
+      if (bonus >= 2) logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawBestCard(player, bonus + 1))}.`, 'good');
+      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, bonus + 1))}.`, 'good');
       break;
     default:
       break;
@@ -541,16 +548,23 @@ function removeActiveFunction(player, functionId) {
   player.active = player.active.filter((fn) => fn.id !== functionId);
 }
 
-function drawBestCard(player, count) {
+function drawSystemCards(player, count) {
   const drawn = [];
   for (let i = 0; i < count; i += 1) {
-    if (player.functionsDeck.length >= player.systemDeck.length && player.functionsDeck.length > 0) {
-      drawn.push(drawFromDeck(player, 'functions'));
-    } else if (player.systemDeck.length > 0) {
-      drawn.push(drawFromDeck(player, 'system'));
-    }
+    const card = drawFromDeck(player, 'system');
+    if (!card) break;
+    drawn.push(card);
   }
-  return drawn.filter(Boolean);
+  return drawn;
+}
+
+function drawReplacementFunction(player, func) {
+  const card = drawFromDeck(player, 'functions');
+  if (card) {
+    logAction(gameState, `${player.name} remplace ${func.name} terminée : pioche automatique de ${card.name} depuis la pile Fonctions.`, 'good');
+    return;
+  }
+  logAction(gameState, `${player.name} devrait piocher une Fonction de remplacement, mais la pile Fonctions est vide.`, 'warn');
 }
 
 function formatDrawnCards(cards) {
@@ -669,15 +683,9 @@ function rebootPlayer(player, forced = false) {
   shuffleInPlace(player.systemDeck);
   clampMemory(player);
 
-  for (let i = 0; i < 5; i += 1) {
-    const deckType = player.functionsDeck.length >= player.systemDeck.length ? 'functions' : 'system';
-    if (!drawFromDeck(player, deckType)) {
-      const fallback = deckType === 'functions' ? 'system' : 'functions';
-      drawFromDeck(player, fallback);
-    }
-  }
+  drawStartingHand(player);
 
-  logAction(gameState, `${player.name} effectue un ${forced ? 'reboot forcé' : 'reboot volontaire'}.`, forced ? 'bad' : 'warn');
+  logAction(gameState, `${player.name} effectue un ${forced ? 'reboot forcé' : 'reboot volontaire'} et repioche une main de départ.`, forced ? 'bad' : 'warn');
 }
 
 function shuffleInPlace(array) {
@@ -800,7 +808,7 @@ function playSystemCard(player, card, targetData) {
       break;
     case 'collecte':
       resolved = cleanBrokenFunction(player, targetData.functionId);
-      if (resolved) drawBestCard(player, 1);
+      if (resolved) drawSystemCards(player, 1);
       break;
     case 'purge':
       resolved = purgeTarget(player, targetData.functionId);
@@ -948,7 +956,7 @@ function purgeTarget(player, functionId) {
     removed += 1;
   }
   if (removed === 0) {
-    drawBestCard(player, 1);
+    drawSystemCards(player, 1);
     logAction(gameState, `Purge Contrôlée n’a rien retiré : ${player.name} pioche 1 carte.`, 'good');
   } else {
     logAction(gameState, `${player.name} retire ${removed} parasite(s).`, 'good');
@@ -1022,21 +1030,27 @@ export function loadDemoScenario(name) {
     case 'depth_choice':
       configureDemoPlayer(cyan, {
         hand: ['factorielle', 'expansion', 'sentinelle', 'planificateur', 'purge'],
-        discard: ['collecte'],
+        discard: ['collecte', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
         memFree: 11
       });
       configureDemoPlayer(orange, {
-        hand: ['pollution', 'glouton', 'hotfix', 'ram'],
+        active: [
+          demoFunction('glouton', 1, { frames: [1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['pollution', 'tri_fusion', 'hotfix', 'ram'],
         discard: ['purge'],
-        memFree: 11
+        memFree: 9
       });
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 1 — Choix de profondeur.',
-        'Tour 1 — Joueur Cyan a passé son premier tour sans lancer de fonction, pour garder sa mémoire pleine.',
-        'Tour 2 — Joueur Cyan a pioché côté Système et a conservé Planificateur local et Purge Contrôlée.',
-        'Tour 3 — Joueur Cyan arrive en phase de conception avec trois fonctions à profondeur variable en main.',
-        'Objectif : jouer une fonction et choisir R. Plus R est haut, plus le bonus sera fort, mais plus la pile demandera de mémoire dans les prochains tours.'
+        'Tour 1 — Joueur Cyan a lancé Routine Sentinelle avec R=1 pour apprendre le cycle complet sans prendre trop de risque.',
+        'Tour 2 — Routine Sentinelle s’est terminée : Joueur Cyan a marqué 2 points et a automatiquement pioché une nouvelle Fonction.',
+        'Tour 2 — Joueur Orange a lancé Greffon Glouton avec R=1 : il menace de faire perdre de la mémoire libre au prochain dépilage.',
+        'Position d’analyse — Score 2-0 pour Joueur Cyan. Cyan a toute sa mémoire libre et trois fonctions possibles en main.',
+        'Question pour la classe — Faut-il choisir une petite profondeur pour aller vite, ou une grande profondeur pour viser un gros bonus B(R)=R² ?'
       ]);
       break;
 
@@ -1046,21 +1060,27 @@ export function loadDemoScenario(name) {
         active: [
           demoFunction('factorielle', 2, { frames: [2, 1, 0], reachedZero: true, nextValue: -1 })
         ],
-        hand: ['collecte', 'purge', 'sentinelle', 'ram'],
-        discard: ['swap'],
+        hand: ['collecte', 'purge', 'recherche', 'ram'],
+        discard: ['swap', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
         memFree: 6
       });
       configureDemoPlayer(orange, {
-        hand: ['pollution', 'stack_spike', 'hotfix', 'glouton'],
-        memFree: 11
+        active: [
+          demoFunction('glouton', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['pollution', 'stack_spike', 'hotfix', 'factorielle'],
+        memFree: 8
       });
       game.phase = PHASES.UPDATE;
       addDemoHistory(game, [
         'Démonstration 2 — Le cas de base n’est pas la fin.',
-        'Tour 1 — Joueur Cyan a lancé Fonction Factorielle avec R=2, ce qui a réservé 3 mémoire.',
-        'Tour 2 — Mise à jour de Joueur Cyan : la fonction a empilé [1] et payé 1 mémoire.',
-        'Tour 3 — Mise à jour de Joueur Cyan : la fonction a empilé [0] et payé 1 mémoire. Elle a atteint le cas de base, mais n’a pas encore terminé.',
-        'Tour 4 — Début de la mise à jour de Joueur Cyan : le prochain dépilage de [0] déclenchera le cas de base, puis la fonction continuera à remonter.'
+        'Tour 1 — Joueur Cyan a terminé Routine Sentinelle et a pris 2 points rapides.',
+        'Tour 2 — Joueur Cyan a lancé Fonction Factorielle avec R=2, ce qui a réservé 3 mémoire.',
+        'Tour 3 — Fonction Factorielle a empilé [1], puis [0]. La pile contient maintenant [2], [1], [0].',
+        'Position d’analyse — La fonction a atteint le cas de base, mais elle n’a pas encore rapporté de points.',
+        'Question pour la classe — Que se passe-t-il quand on dépile [0] ? Pourquoi la fonction reste-t-elle en jeu après le cas de base ?'
       ]);
       break;
 
@@ -1068,12 +1088,14 @@ export function loadDemoScenario(name) {
       game.turn = 4;
       configureDemoPlayer(cyan, {
         active: [
-          demoFunction('factorielle', 2, { frames: [2], reachedZero: false, nextValue: 1 }),
-          demoFunction('compactage', 1, { frames: [1, 0], reachedZero: true, nextValue: -1 })
+          demoFunction('factorielle', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 }),
+          demoFunction('compactage', 1, { frames: [1], reachedZero: false, nextValue: 0 })
         ],
         hand: ['purge', 'collecte', 'ram'],
-        discard: ['pollution'],
-        memTotal: 8,
+        discard: ['pollution', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memTotal: 11,
         memFree: 1
       });
       configureDemoPlayer(orange, {
@@ -1083,11 +1105,12 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.UPDATE;
       addDemoHistory(game, [
         'Démonstration 3 — Choix stratégique avec 1 mémoire libre.',
-        'Tours précédents — Joueur Cyan a perdu 3 mémoire totale après des pénalités, il joue maintenant avec 8 mémoire totale.',
-        'Tour 2 — Joueur Cyan a lancé Compactage Mémoire avec R=1.',
-        'Tour 3 — Compactage Mémoire a empilé [0]. Joueur Cyan a ensuite lancé Fonction Factorielle avec R=2.',
-        'Tour 4 — Joueur Cyan commence la mise à jour avec seulement 1 mémoire libre.',
-        'Choix légal : mettre à jour Compactage d’abord libère de la mémoire, puis Factorielle peut empiler plus confortablement.'
+        'Tour 1 — Joueur Cyan a déjà terminé Routine Sentinelle : 2 points, mais la partie est encore loin d’être gagnée.',
+        'Tour 2 — Joueur Cyan a lancé Fonction Factorielle avec R=2.',
+        'Tour 3 — Fonction Factorielle a empilé [1], puis Joueur Cyan a lancé Compactage Mémoire avec R=1.',
+        'Tour 3 — Joueur Orange a réduit la mémoire libre de Cyan. Il reste 1 mémoire libre, mais les deux fonctions veulent empiler [0].',
+        'Position d’analyse — Une seule des deux fonctions peut atteindre le cas de base maintenant ; l’autre cassera si on tente aussi de l’empiler.',
+        'Question pour la classe — Quelle fonction sauver en premier, et que nous apprend ce choix sur les appels récursifs qui consomment de la mémoire ?'
       ]);
       break;
 
@@ -1098,23 +1121,30 @@ export function loadDemoScenario(name) {
           demoFunction('quicksort', 3, { broken: true, frames: [3, 2, 1, 0, 'P', 'P'], reachedZero: true })
         ],
         hand: ['hotfix', 'collecte', 'debug', 'purge'],
-        discard: ['swap'],
+        discard: ['swap', 'factorielle'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
         memFree: 5
       });
       configureDemoPlayer(orange, {
+        active: [
+          demoFunction('glouton', 1, { frames: [1, 0], reachedZero: true, nextValue: -1 })
+        ],
         hand: ['pollution', 'factorielle', 'ram', 'injection'],
-        discard: ['stack_spike'],
-        memFree: 11
+        discard: ['stack_spike', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 8
       });
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 4 — Nettoyer ou réparer une fonction cassée.',
-        'Tour 1 — Joueur Cyan a lancé Quicksort Agressif avec R=3.',
-        'Tour 2 — Quicksort a empilé [2].',
-        'Tour 3 — Quicksort a atteint [0]. Une première perturbation a ajouté un parasite sans casser la fonction.',
-        'Tour 4 — Joueur Orange a joué Stack Spike sur une pile à 5 cadres. Le premier parasite a porté la pile à 6 cadres, le second aurait créé un 7e cadre : Quicksort a cassé.',
-        'Résultat — Quicksort est cassé : il ne progresse plus, ne rapporte aucun point, mais occupe encore 6 mémoire.',
-        'Choix actuel : Hotfix répare avec le cadre initial seul, Collecte nettoie et libère toute la mémoire, Débogueur dépile seulement le sommet.'
+        'Tour 1 — Joueur Cyan a terminé Fonction Factorielle avec R=2 : 6 points et une nouvelle Fonction piochée automatiquement.',
+        'Tour 2 — Joueur Cyan a lancé Quicksort Agressif avec R=3 pour viser un gros bonus.',
+        'Tours 3-4 — Quicksort a atteint [0], puis des parasites ont été ajoutés sur la pile.',
+        'Tour 4 — Joueur Orange a joué Stack Spike sur une pile à 5 cadres. Le deuxième parasite aurait créé un 7e cadre : Quicksort a cassé.',
+        'Position d’analyse — Cyan mène 6-2, mais Quicksort occupe encore 6 mémoire et ne progressera plus tant qu’il est cassé.',
+        'Question pour la classe — Nettoyer, réparer ou déboguer : quelle option libère de la mémoire, laquelle garde une chance de marquer, laquelle gagne seulement du temps ?'
       ]);
       break;
 
@@ -1125,22 +1155,28 @@ export function loadDemoScenario(name) {
           demoFunction('compactage', 1, { frames: [1], reachedZero: false, nextValue: 0 })
         ],
         hand: ['ram', 'expansion', 'purge', 'sentinelle'],
-        discard: ['collecte'],
+        discard: ['collecte', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
         memTotal: 10,
-        memFree: 3
+        memFree: 3,
+        updatedThisTurnKeys: ['factorielle']
       });
       configureDemoPlayer(orange, {
-        hand: ['pollution', 'stack_spike', 'hotfix', 'glouton'],
-        memFree: 11
+        active: [
+          demoFunction('glouton', 1, { frames: [1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['pollution', 'stack_spike', 'hotfix', 'factorielle'],
+        memFree: 9
       });
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 5 — Barrette RAM.',
-        'Tour précédent — Joueur Cyan a subi une perte de mémoire totale : sa capacité est descendue à 10.',
-        'Tour 3 — Mise à jour : Fonction Factorielle a empilé [1], puis Joueur Cyan est passé en phase de conception.',
-        'Tour 3 — Joueur Cyan vient de lancer Compactage Mémoire avec R=1, il ne lui reste que 3 mémoire libre.',
-        'Barrette RAM coûte exactement 3 : elle peut être installée, reste en Hardware, puis augmente la mémoire totale et la mémoire libre de 4.',
-        'Objectif : jouer Barrette RAM puis observer la mémoire totale, la mémoire libre et la mémoire utilisée.'
+        'Tour 1 — Joueur Cyan a marqué 2 points avec Routine Sentinelle, puis a perdu 1 mémoire totale sur une situation de pioche tendue.',
+        'Tour 2 — Joueur Cyan a lancé Fonction Factorielle avec R=2.',
+        'Tour 3 — Mise à jour : Fonction Factorielle a empilé [1]. En conception, Cyan a lancé Compactage Mémoire avec R=1.',
+        'Position d’analyse — Cyan a 10 mémoire totale, 7 mémoire déjà utilisée et seulement 3 mémoire libre.',
+        'Question pour la classe — Faut-il dépenser les 3 dernières mémoires pour installer Barrette RAM ? Observez ensuite mémoire totale, mémoire libre et mémoire utilisée.'
       ]);
       break;
 
@@ -1148,7 +1184,9 @@ export function loadDemoScenario(name) {
       game.turn = 6;
       configureDemoPlayer(cyan, {
         hand: ['stack_spike', 'injection', 'pollution', 'factorielle'],
-        discard: ['purge'],
+        discard: ['purge', 'factorielle'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
         memFree: 8
       });
       configureDemoPlayer(orange, {
@@ -1156,17 +1194,20 @@ export function loadDemoScenario(name) {
           demoFunction('tri_fusion', 4, { frames: [4, 3, 2, 1, 0], reachedZero: true, nextValue: -1 })
         ],
         hand: ['hotfix', 'collecte', 'ram', 'sentinelle'],
-        discard: ['purge'],
+        discard: ['purge', 'sentinelle', 'recherche'],
+        completed: demoCompleted(['sentinelle', 'recherche']),
+        score: 8,
         memFree: 4
       });
       game.phase = PHASES.ACTION;
       addDemoHistory(game, [
         'Démonstration 6 — Casse avec Stack Spike.',
-        'Tour 1 — Joueur Orange a lancé Tri Fusion Tempéré avec R=4.',
-        'Tours 2 à 5 — À chacune de ses mises à jour, Joueur Orange a empilé [3], puis [2], puis [1], puis [0].',
-        'État actuel — Tri Fusion Tempéré contient exactement 5 cadres : [4], [3], [2], [1], [0].',
-        'Tour 6 — Joueur Cyan est en phase de conception avec Stack Spike en main.',
-        'Objectif : jouer Stack Spike sur cette fonction. La première charge la ferait passer à 6 cadres, la seconde créerait un 7e cadre : la fonction casse immédiatement.'
+        'Tours précédents — Joueur Orange a déjà terminé Routine Sentinelle et Recherche Dichotomique : 8 points et 2 noms différents.',
+        'Tour 2 — Joueur Orange a lancé Tri Fusion Tempéré avec R=4.',
+        'Tours 3 à 5 — Tri Fusion a empilé [3], [2], [1], puis [0]. Il contient exactement 5 cadres.',
+        'Position d’analyse — Si Tri Fusion termine plus tard, Orange ajoutera 18 points et remplira la condition des 3 fonctions terminées.',
+        'Tour 6 — Joueur Cyan a Stack Spike en main et assez de mémoire pour le jouer maintenant.',
+        'Question pour la classe — Pourquoi Stack Spike est-il légal sur une pile à 5 cadres, et pourquoi provoque-t-il une casse immédiate ici ?'
       ]);
       break;
 
@@ -1226,6 +1267,9 @@ function configureDemoPlayer(player, options = {}) {
   player.functionsDeck = decks.functions;
   player.systemDeck = decks.system;
   player.memFree = options.memFree ?? Math.max(0, player.memTotal - getPlayerUsedMemory(player));
+  player.updatedThisTurn = (options.updatedThisTurnKeys || [])
+    .map((key) => player.active.find((func) => func.cardKey === key)?.id)
+    .filter(Boolean);
 }
 
 function buildRemainingDemoDecks(usedKeys) {
@@ -1262,6 +1306,10 @@ function demoFunction(key, R, overrides = {}) {
     broken: Boolean(overrides.broken),
     memUsed: overrides.memUsed ?? estimateFunctionMemory(CARD_DEFINITIONS[key], frames)
   };
+}
+
+function demoCompleted(keys) {
+  return keys.map((key) => ({ key, name: CARD_DEFINITIONS[key]?.name || key }));
 }
 
 function inferNextValue(frames, reachedZero) {
