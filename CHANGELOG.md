@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 — Version internet V2
+
+- Ajout d’une version internet V2 hébergeable dans `internet/v2/public/`.
+- Séparation du moteur, des données, de l’interface et de la persistance.
+- Ajout d’une API PHP simple pour créer, charger et sauvegarder une partie distante.
+- Meilleur guidage des phases, journal d’actions, et détection d’API.
+
 ## 0.1.0 — Dépôt initial
 
 - Création de la structure en deux parties : version physique et version internet.

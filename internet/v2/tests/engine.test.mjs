@@ -84,6 +84,7 @@ function assertFunctionMemoryLifecycle() {
   const func = player.active[0];
   assert.equal(player.memFree, 8, 'Launching Factorielle reserves its printed cost');
   assert.equal(func.memUsed, 3, 'Initial frame reserves only the printed cost');
+  assert.equal(player.discard.some((card) => card.key === 'factorielle'), false, 'Active function card is not in discard');
 
   state.phase = rules.PHASES.UPDATE;
   assert.equal(engine.updateFunction(func.id), true);
@@ -103,6 +104,7 @@ function assertPlanifierAndHotfix() {
   player.hand = [createCard('planificateur')];
   player.memFree = 11;
   assert.equal(engine.playCard(0, player.hand[0].id), true);
+  assert.equal(player.discard.some((card) => card.key === 'planificateur'), false, 'Active hardware card is not in discard');
 
   state.phase = rules.PHASES.UPDATE;
   player.updatedThisTurn = [];
@@ -151,6 +153,69 @@ function assertFunctionDescriptionsUseRulePhases() {
     });
 }
 
+function assertPlayerDeckCoherence(player) {
+  const counts = new Map(DECK_COMPOSITION.map(([key]) => [key, 0]));
+  const add = (key) => counts.set(key, (counts.get(key) || 0) + 1);
+
+  player.hand.forEach((card) => add(card.key));
+  player.active.forEach((func) => add(func.cardKey));
+  player.hardware.forEach((card) => add(card.key));
+  player.discard.forEach((card) => add(card.key));
+  player.functionsDeck.forEach((card) => add(card.key));
+  player.systemDeck.forEach((card) => add(card.key));
+
+  DECK_COMPOSITION.forEach(([key, expected]) => {
+    assert.equal(counts.get(key), expected, `${player.name} has incoherent card count for ${key}`);
+  });
+}
+
+function assertDemoScenarios() {
+  const scenarios = [
+    'depth_choice',
+    'base_not_end',
+    'strategic_memory',
+    'repair_or_clean',
+    'ram',
+    'stack_spike_break'
+  ];
+
+  scenarios.forEach((scenario) => {
+    const state = engine.loadDemoScenario(scenario);
+    assert.notEqual(state.phase, rules.PHASES.GAME_OVER, `${scenario} should be playable`);
+    assert.ok(state.log.length >= 3, `${scenario} should include a readable history`);
+    state.players.forEach(assertPlayerDeckCoherence);
+  });
+
+  let state = engine.loadDemoScenario('base_not_end');
+  let cyan = state.players[0];
+  assert.equal(engine.updateFunction(cyan.active[0].id), true);
+  assert.equal(cyan.active.length, 1, 'Base case should not complete the function');
+  assert.deepEqual(cyan.active[0].frames, [2, 1]);
+
+  state = engine.loadDemoScenario('strategic_memory');
+  cyan = state.players[0];
+  const compactage = cyan.active.find((func) => func.cardKey === 'compactage');
+  const factorielle = cyan.active.find((func) => func.cardKey === 'factorielle');
+  assert.equal(cyan.memFree, 1);
+  assert.equal(engine.updateFunction(compactage.id), true);
+  assert.ok(cyan.memFree >= 2, 'Compactage base case should create breathing room');
+  assert.equal(engine.updateFunction(factorielle.id), true);
+
+  state = engine.loadDemoScenario('ram');
+  cyan = state.players[0];
+  const ram = cyan.hand.find((card) => card.key === 'ram');
+  assert.equal(engine.playCard(0, ram.id), true);
+  assert.equal(cyan.memTotal, 14);
+  assert.equal(cyan.hardware.some((card) => card.key === 'ram'), true);
+
+  state = engine.loadDemoScenario('stack_spike_break');
+  cyan = state.players[0];
+  const orange = state.players[1];
+  const stackSpike = cyan.hand.find((card) => card.key === 'stack_spike');
+  assert.equal(engine.playCard(0, stackSpike.id, { functionId: orange.active[0].id }), true);
+  assert.equal(orange.active[0].broken, true, 'Stack Spike should break the 5-frame function');
+}
+
 assertMapsEqual(deckCompositionFromCards(), parseDeckMarkdown());
 assertRulesConstants();
 assertFunctionDescriptionsUseRulePhases();
@@ -159,5 +224,6 @@ assertDeckBuild();
 assertFunctionMemoryLifecycle();
 assertPlanifierAndHotfix();
 assertRebootStopsActions();
+assertDemoScenarios();
 
 console.log('V2 engine tests ok');

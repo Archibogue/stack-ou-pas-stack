@@ -14,6 +14,7 @@ Version web V2 hébergeable pour le jeu d’initiation quadratique.
 `internet/v2/public/`
 
 - `index.html` : point d’entrée de l’application.
+- `regles.html` : page autonome avec les règles complètes et la référence des cartes.
 - `assets/css/app.css` : styles centralisés.
 - `assets/js/` : modules JavaScript séparés.
 - `api/` : endpoints PHP optionnels.

@@ -60,6 +60,35 @@ button.primary {
   font-weight: 700;
 }
 
+a {
+  color: var(--accent);
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  padding: 10px 14px;
+  text-decoration: none;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.button-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.button-link.primary {
+  background: linear-gradient(135deg, rgba(83, 208, 255, 0.3), rgba(255, 184, 120, 0.25));
+  border-color: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+}
+
 button.good { border-color: rgba(126, 231, 135, 0.45); }
 button.bad { border-color: rgba(255, 123, 114, 0.45); }
 button.warn { border-color: rgba(255, 209, 102, 0.45); }
@@ -239,6 +268,16 @@ button.warn { border-color: rgba(255, 209, 102, 0.45); }
   font-weight: 700;
 }
 
+.card .card-rule {
+  border: 1px solid rgba(83, 208, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(83, 208, 255, 0.08);
+  color: #dff6ff;
+  padding: 7px 9px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .card .desc {
   font-size: 0.92rem;
   line-height: 1.45;
@@ -403,12 +442,95 @@ textarea, input[type="text"], select {
 
 .hidden { display: none !important; }
 
+.rules-page {
+  max-width: 1180px;
+}
+
+.rules-page code {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.08rem 0.32rem;
+}
+
+.rules-page p,
+.rules-page li {
+  line-height: 1.6;
+}
+
+.rules-page h3 {
+  margin: 18px 0 8px;
+}
+
+.rules-section,
+.rules-summary,
+.rules-toc {
+  margin-bottom: 18px;
+}
+
+.rules-grid,
+.rules-columns,
+.rules-card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.rules-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.rules-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rules-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 12px 0 22px;
+}
+
+.rules-toc ol {
+  columns: 2;
+  gap: 24px;
+  padding-left: 24px;
+}
+
+.rules-toc li {
+  break-inside: avoid;
+}
+
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.rules-table th,
+.rules-table td {
+  border: 1px solid var(--border);
+  padding: 10px;
+  text-align: center;
+}
+
+.rules-table th {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 @media(max-width: 1200px) {
   .grid-3 { grid-template-columns: 1fr; }
+  .rules-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media(max-width: 740px) {
   .app { padding: 12px; }
   .header { flex-direction: column; }
   .header-actions { justify-content: stretch; }
+  .button-link { width: 100%; }
+  .rules-grid,
+  .rules-columns,
+  .rules-card-grid { grid-template-columns: 1fr; }
+  .rules-toc ol { columns: 1; }
 }

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Règles complètes — Stack ou pas Stack</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <main class="app rules-page">
+    <header class="header">
+      <div>
+        <h1>Règles complètes</h1>
+        <p>Stack ou pas Stack — initiation quadratique. Version courte, symétrique, pensée pour apprendre la récursion, la pile d’appels et la gestion mémoire.</p>
+      </div>
+      <nav class="header-actions" aria-label="Navigation">
+        <a class="button-link primary" href="index.html">Retour au jeu</a>
+      </nav>
+    </header>
+
+    <section class="panel panel-body rules-summary" aria-labelledby="resume">
+      <h2 id="resume">Résumé rapide</h2>
+      <div class="rules-grid">
+        <div class="stat"><span class="label">Mémoire de départ</span><span class="value">11 / 11</span></div>
+        <div class="stat"><span class="label">Victoire</span><span class="value">11 points</span></div>
+        <div class="stat"><span class="label">Fonctions</span><span class="value">3 terminées</span></div>
+        <div class="stat"><span class="label">Bonus</span><span class="value">B(R)=R²</span></div>
+        <div class="stat"><span class="label">Overflow</span><span class="value">7e cadre</span></div>
+        <div class="stat"><span class="label">Deck</span><span class="value">26 cartes</span></div>
+      </div>
+    </section>
+
+    <section class="panel panel-body rules-toc" aria-labelledby="sommaire">
+      <h2 id="sommaire">Sommaire</h2>
+      <ol>
+        <li><a href="#but">But du jeu</a></li>
+        <li><a href="#materiel">Matériel et decks</a></li>
+        <li><a href="#mise-en-place">Mise en place</a></li>
+        <li><a href="#tour">Ordre d’un tour</a></li>
+        <li><a href="#memoire">Mémoire</a></li>
+        <li><a href="#fonctions">Fonctions et récursion</a></li>
+        <li><a href="#parasites">Cadres parasites et overflow</a></li>
+        <li><a href="#cartes-systeme">Commandes, Interrupts et Hardware</a></li>
+        <li><a href="#reboot">Reboot</a></li>
+        <li><a href="#victoire">Victoire</a></li>
+        <li><a href="#reference-cartes">Référence des cartes</a></li>
+      </ol>
+    </section>
+
+    <section id="but" class="panel panel-body rules-section">
+      <h2>1. But du jeu</h2>
+      <p>Chaque joueur pilote des fonctions récursives qui occupent de la mémoire, empilent des cadres, atteignent un cas de base, puis dépilent jusqu’à terminer. Le but est de marquer au moins 11 points tout en terminant au moins 3 fonctions, avec au moins 2 noms de fonctions différents.</p>
+      <p>La partie se joue en duel, avec deux decks identiques. Les décisions importantes sont le choix de profondeur <code>R</code>, la gestion de mémoire libre, le timing du reboot et l’usage des cartes système pour réparer, nettoyer ou perturber les piles adverses.</p>
+    </section>
+
+    <section id="materiel" class="panel panel-body rules-section">
+      <h2>2. Matériel et decks</h2>
+      <p>Chaque joueur utilise le même deck de 26 cartes, séparé en deux piles.</p>
+      <div class="rules-columns">
+        <div>
+          <h3>Pile Fonctions — 12 cartes</h3>
+          <ul>
+            <li>Fonction Factorielle ×2</li>
+            <li>Tri Fusion Tempéré ×1</li>
+            <li>Recherche Dichotomique ×1</li>
+            <li>Routine Sentinelle ×2</li>
+            <li>Greffon Glouton ×2</li>
+            <li>Archiviste du Cache ×1</li>
+            <li>Quicksort Agressif ×1</li>
+            <li>Expansion Quadratique ×1</li>
+            <li>Compactage Mémoire ×1</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Pile Système — 14 cartes</h3>
+          <ul>
+            <li>Hotfix ×1</li>
+            <li>Collecte Incrémentale ×2</li>
+            <li>Stack Spike ×1</li>
+            <li>Injection de Boucle ×1</li>
+            <li>Overclocking ×1</li>
+            <li>Débogueur pas à pas ×1</li>
+            <li>Planificateur local ×1</li>
+            <li>Barrette RAM ×1</li>
+            <li>Pollution de Cache ×2</li>
+            <li>Purge Contrôlée ×2</li>
+            <li>Swap Brutal ×1</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="mise-en-place" class="panel panel-body rules-section">
+      <h2>3. Mise en place</h2>
+      <ol>
+        <li>Chaque joueur commence avec 11 mémoire totale et 11 mémoire libre.</li>
+        <li>Chaque joueur mélange séparément sa pile Fonctions et sa pile Système.</li>
+        <li>Chaque joueur pioche 5 cartes : 3 cartes depuis la pile Fonctions et 2 cartes depuis la pile Système.</li>
+        <li>Le premier joueur commence, mais il ne pioche pas au premier tour.</li>
+      </ol>
+    </section>
+
+    <section id="tour" class="panel panel-body rules-section">
+      <h2>4. Ordre d’un tour</h2>
+      <ol>
+        <li><strong>Phase de mise à jour</strong> : le joueur actif met à jour toutes ses fonctions actives non cassées, dans l’ordre de son choix.</li>
+        <li><strong>Phase de pioche</strong> : il pioche 1 carte dans la pile Fonctions ou dans la pile Système. Le premier joueur saute cette phase au tout premier tour.</li>
+        <li><strong>Phase de conception</strong> : il peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.</li>
+        <li><strong>Fin de tour</strong> : les effets temporaires cessent, puis le tour passe à l’autre joueur.</li>
+      </ol>
+      <p>Les fonctions actives non cassées doivent toutes être mises à jour avant de passer à la pioche. Une carte ne peut pas être jouée avant la phase de conception, sauf si une règle d’Interrupt précise explicitement une réaction.</p>
+      <p>Dans la V2 web locale, les Interrupts sont résolus depuis l’interface de conception afin de garder le hot-seat simple. Une vraie pile de réaction est prévue comme évolution.</p>
+    </section>
+
+    <section id="memoire" class="panel panel-body rules-section">
+      <h2>5. Mémoire</h2>
+      <p>La mémoire totale est la capacité maximale du joueur. La mémoire libre sert à payer les cartes et les empilages récursifs.</p>
+      <ul>
+        <li>Une Fonction payée réserve son coût imprimé tant qu’elle reste active, cassée ou en cours d’exécution.</li>
+        <li>Chaque cadre récursif ajouté après le cadre initial coûte 1 mémoire libre, sauf effet contraire.</li>
+        <li>Quand un cadre récursif normal est dépilé, cette mémoire est libérée.</li>
+        <li>Quand le cadre initial est dépilé et que la fonction se termine, la mémoire initiale réservée est libérée.</li>
+        <li>Les Commandes et Interrupts demandent de pouvoir payer leur coût, puis libèrent cette mémoire après résolution.</li>
+        <li>Les Hardware restent en jeu et continuent d’occuper leur coût mémoire.</li>
+      </ul>
+    </section>
+
+    <section id="fonctions" class="panel panel-body rules-section">
+      <h2>6. Fonctions et récursion</h2>
+      <p>Quand une fonction est lancée, son contrôleur choisit sa profondeur <code>R</code> si la carte indique « Empiler jusqu’à X ». Pour une carte « Empiler X », <code>R=X</code>. La fonction place immédiatement son cadre initial <code>[R]</code>.</p>
+      <p>À chaque phase de mise à jour, l’état de la fonction décide automatiquement de l’action :</p>
+      <ul>
+        <li>si la fonction n’a pas encore atteint <code>[0]</code>, elle empile le cadre suivant ;</li>
+        <li>si elle a déjà atteint <code>[0]</code>, elle dépile le cadre du sommet.</li>
+      </ul>
+      <p>Le cadre <code>[0]</code> déclenche le cas de base. Les cadres supérieurs à <code>[0]</code> déclenchent les effets de remontée. La fonction se termine seulement quand son cadre initial est dépilé et que sa pile devient vide.</p>
+      <h3>Bonus quadratique</h3>
+      <table class="rules-table">
+        <thead><tr><th>R</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
+        <tbody><tr><th>B(R)=R²</th><td>0</td><td>1</td><td>4</td><td>9</td><td>16</td><td>25</td></tr></tbody>
+      </table>
+    </section>
+
+    <section id="parasites" class="panel panel-body rules-section">
+      <h2>7. Cadres parasites et overflow</h2>
+      <p>Un cadre parasite représente une charge parasite sur la pile d’appels.</p>
+      <ul>
+        <li>Il compte dans la taille de la pile.</li>
+        <li>Il doit être dépilé normalement.</li>
+        <li>Il ne produit aucun effet.</li>
+        <li>Il ne libère pas de mémoire.</li>
+        <li>Il ne modifie jamais <code>R</code>.</li>
+      </ul>
+      <p>Une fonction casse si elle devrait recevoir un 7e cadre. Une fonction cassée reste en jeu, continue d’occuper sa mémoire et ne rapporte aucun point tant qu’elle n’est pas nettoyée ou réparée.</p>
+      <p><strong>Stack Spike</strong> cible une fonction contenant exactement 4 ou 5 cadres. Elle ajoute 2 cadres parasites. Si cela devait créer un 7e cadre, la fonction casse immédiatement.</p>
+    </section>
+
+    <section id="cartes-systeme" class="panel panel-body rules-section">
+      <h2>8. Commandes, Interrupts et Hardware</h2>
+      <div class="rules-columns">
+        <div>
+          <h3>Commande</h3>
+          <p>Carte jouée pendant la phase de conception. Son coût doit pouvoir être payé, puis sa mémoire est libérée après résolution.</p>
+        </div>
+        <div>
+          <h3>Interrupt</h3>
+          <p>Carte de réaction. Dans la V2 web, elle est actuellement jouée depuis la phase de conception et résolue immédiatement.</p>
+        </div>
+        <div>
+          <h3>Hardware</h3>
+          <p>Amélioration durable. Elle reste en jeu, occupe son coût mémoire et compte dans la limite de 2 Hardware actifs.</p>
+        </div>
+      </div>
+      <p>Un joueur peut contrôler au maximum 3 fonctions actives et 2 Hardware actifs.</p>
+    </section>
+
+    <section id="reboot" class="panel panel-body rules-section">
+      <h2>9. Reboot</h2>
+      <p>Pendant sa phase de conception, un joueur peut effectuer un reboot volontaire à la place de ses autres actions du tour.</p>
+      <ol>
+        <li>Il défausse ses fonctions actives, intactes ou cassées.</li>
+        <li>Les piles associées sont retirées sans produire d’effet.</li>
+        <li>Il récupère la mémoire occupée par ses fonctions.</li>
+        <li>Ses Hardware restent en jeu et continuent d’occuper leur mémoire.</li>
+        <li>Il défausse toute sa main.</li>
+        <li>Il remélange sa défausse dans les deux piles selon les types : Fonctions avec Fonctions, Système avec Système.</li>
+        <li>Il repioche 5 cartes si possible.</li>
+        <li>Il ne peut jouer aucune autre carte ce tour-ci.</li>
+      </ol>
+    </section>
+
+    <section id="victoire" class="panel panel-body rules-section">
+      <h2>10. Victoire</h2>
+      <p>Un joueur gagne dès qu’il remplit simultanément les trois conditions suivantes :</p>
+      <ul>
+        <li>avoir 11 points ou plus ;</li>
+        <li>avoir terminé au moins 3 fonctions ;</li>
+        <li>avoir terminé des fonctions d’au moins 2 noms différents.</li>
+      </ul>
+      <p>Si un joueur tombe à 0 mémoire totale, son adversaire gagne.</p>
+    </section>
+
+    <section id="reference-cartes" class="panel panel-body rules-section">
+      <h2>11. Référence des cartes</h2>
+
+      <h3>Fonctions</h3>
+      <div class="rules-card-grid">
+        <article class="card function"><div class="meta">Fonction — coût 3 — valeur 2</div><h3 class="title">Fonction Factorielle ×2</h3><p class="desc">Empiler jusqu’à 4. Cas de base : pioche 1 carte. Remontée : gagne 1 mémoire libre. Terminaison : gagne B(R) mémoire libre.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 3 — valeur 2</div><h3 class="title">Tri Fusion Tempéré ×1</h3><p class="desc">Empiler jusqu’à 4. Cas de base : pioche 1 carte. Remontée : réordonne virtuellement. Terminaison : retire B(R) cadres parasites parmi tes fonctions.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 2 — valeur 2</div><h3 class="title">Recherche Dichotomique ×1</h3><p class="desc">Empiler 3. Cas de base : révèle puis prend 1 carte. Remontée : retire 1 cadre parasite. Terminaison : pioche B(R)+1 cartes.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 2 — valeur 1</div><h3 class="title">Routine Sentinelle ×2</h3><p class="desc">Empiler jusqu’à 2. Cas de base : regarde le dessus d’une pile. Remontée : gagne 1 mémoire libre. Terminaison : pioche B(R) cartes.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 2 — valeur 1</div><h3 class="title">Greffon Glouton ×2</h3><p class="desc">Empiler jusqu’à 3. Cas de base : pioche 1 carte. Remontée : l’adversaire perd 1 mémoire libre. Terminaison : ajoute B(R) parasites chez l’adversaire.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 2 — valeur 1</div><h3 class="title">Archiviste du Cache ×1</h3><p class="desc">Empiler jusqu’à 3. Cas de base : regarde 2 cartes. Remontée : gagne 1 mémoire libre. Terminaison : pioche B(R), puis défausse 1 carte.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 3 — valeur 2</div><h3 class="title">Quicksort Agressif ×1</h3><p class="desc">Empiler jusqu’à 4. Cas de base : pioche 1 carte. Remontée : l’adversaire perd 1 mémoire libre. Terminaison : l’adversaire perd B(R) mémoire libre.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 3 — valeur 2</div><h3 class="title">Expansion Quadratique ×1</h3><p class="desc">Empiler jusqu’à 5. Cas de base : pioche 1 carte. Remontée : gagne 1 mémoire libre. Terminaison : gagne B(R) mémoire libre.</p></article>
+        <article class="card function"><div class="meta">Fonction — coût 3 — valeur 2</div><h3 class="title">Compactage Mémoire ×1</h3><p class="desc">Empiler jusqu’à 3. Cas de base : gagne 1 mémoire libre. Remontée : gagne 1 mémoire libre. Terminaison : nettoie une fonction cassée. Si B(R) ≥ 2, pioche 1 carte.</p></article>
+      </div>
+
+      <h3>Système</h3>
+      <div class="rules-card-grid">
+        <article class="card command"><div class="meta">Commande — coût 3</div><h3 class="title">Hotfix ×1</h3><p class="desc">Répare une fonction cassée avec son cadre initial seulement.</p></article>
+        <article class="card command"><div class="meta">Commande — coût 2</div><h3 class="title">Collecte Incrémentale ×2</h3><p class="desc">Nettoie une fonction cassée puis pioche 1 carte.</p></article>
+        <article class="card interrupt"><div class="meta">Interrupt — coût 3</div><h3 class="title">Stack Spike ×1</h3><p class="desc">Ajoute 2 parasites sur une fonction à 4 ou 5 cadres.</p></article>
+        <article class="card interrupt"><div class="meta">Interrupt — coût 2</div><h3 class="title">Injection de Boucle ×1</h3><p class="desc">Ajoute 1 parasite. Si la cible ne paie pas 1 mémoire, elle casse.</p></article>
+        <article class="card hardware"><div class="meta">Hardware — coût 2</div><h3 class="title">Overclocking ×1</h3><p class="desc">Une fois par tour, met à jour une fonction en plus. Si elle ne termine pas ce tour-ci, perds 1 mémoire libre.</p></article>
+        <article class="card interrupt"><div class="meta">Interrupt — coût 2</div><h3 class="title">Débogueur pas à pas ×1</h3><p class="desc">Dépile le sommet d’une fonction cassée sans produire son effet.</p></article>
+        <article class="card hardware"><div class="meta">Hardware — coût 2</div><h3 class="title">Planificateur local ×1</h3><p class="desc">Une fois par tour, le premier empilage d’une de tes fonctions coûte 0 mémoire.</p></article>
+        <article class="card hardware"><div class="meta">Hardware — coût 3</div><h3 class="title">Barrette RAM ×1</h3><p class="desc">Gagne +4 mémoire totale et +4 mémoire libre.</p></article>
+        <article class="card command"><div class="meta">Commande — coût 2</div><h3 class="title">Pollution de Cache ×2</h3><p class="desc">Ajoute 2 parasites à une fonction adverse.</p></article>
+        <article class="card command"><div class="meta">Commande — coût 2</div><h3 class="title">Purge Contrôlée ×2</h3><p class="desc">Retire jusqu’à 2 parasites d’une fonction. Si aucun parasite n’est retiré, pioche 1 carte.</p></article>
+        <article class="card command"><div class="meta">Commande — coût 1</div><h3 class="title">Swap Brutal ×1</h3><p class="desc">Gagne 3 mémoire libre temporaire. Si aucune fonction ne termine ce tour, perds 1 mémoire totale.</p></article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

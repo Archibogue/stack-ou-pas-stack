@@ -1,5 +1,5 @@
-import { createPlayer, createGameState, drawFromDeck, createFunctionFrame, restoreState, cloneStateForSave } from './game-state.js';
-import { CARD_DEFINITIONS, createCard } from './cards.js';
+import { createGameState, drawFromDeck, createFunctionFrame, restoreState, cloneStateForSave } from './game-state.js';
+import { CARD_DEFINITIONS, DECK_COMPOSITION, createCard } from './cards.js';
 import { MAX_FRAMES_PER_FUNCTION, PHASES, bonusRecursion, isWinningState } from './rules.js';
 import { saveLocalState, exportStateToClipboard, importStateFromJson, saveRemoteGame } from './storage.js';
 
@@ -385,10 +385,16 @@ function drawBestCard(player, count) {
   }
 }
 
-function discardCardFromHand(player, cardId, silent = false) {
+function removeCardFromHand(player, cardId) {
   const index = player.hand.findIndex((c) => c.id === cardId);
-  if (index === -1) return;
+  if (index === -1) return null;
   const [card] = player.hand.splice(index, 1);
+  return card;
+}
+
+function discardCardFromHand(player, cardId, silent = false) {
+  const card = removeCardFromHand(player, cardId);
+  if (!card) return;
   player.discard.push(card);
   if (!silent) logAction(gameState, `${player.name} défausse ${card.name}.`, 'sys');
 }
@@ -567,7 +573,7 @@ function playFunctionCard(player, card, R) {
   const depth = card.mode === 'fixe' ? card.maxR : Math.max(0, Math.min(card.maxR, Number.isInteger(R) ? R : 0));
   const func = createFunctionFrame(card, depth);
   player.active.push(func);
-  discardCardFromHand(player, card.id, true);
+  removeCardFromHand(player, card.id);
   logAction(gameState, `${player.name} lance ${card.name} avec R=${depth}.`, 'sys');
   return true;
 }
@@ -579,7 +585,7 @@ function playHardwareCard(player, card, targetData) {
   }
   if (!payMemory(player, card.cost)) return false;
   player.hardware.push(card);
-  discardCardFromHand(player, card.id, true);
+  removeCardFromHand(player, card.id);
   switch (card.key) {
     case 'ram':
       player.memTotal += 4;
@@ -819,49 +825,252 @@ export function getPlayerUsedMemory(player) {
 }
 
 export function loadDemoScenario(name) {
-  const player1 = createPlayer('Joueur Cyan', 0);
-  const player2 = createPlayer('Joueur Orange', 1);
-  const state = createGameState(player1.name, player2.name);
-  const game = state;
-  game.log = [];
+  const game = createDemoGame();
+  const cyan = game.players[0];
+  const orange = game.players[1];
+
   switch (name) {
-    case 'overflow':
-      game.players[0].active = [
-        { ...createFunctionFrame(CARD_DEFINITIONS.factorielle, 4), frames: [4, 3, 2, 1, 0, 'P'], nextValue: -1, reachedZero: true, memUsed: 7 }
-      ];
-      game.players[0].memFree = 4;
+    case 'depth_choice':
+      configureDemoPlayer(cyan, {
+        hand: ['factorielle', 'expansion', 'sentinelle', 'planificateur', 'purge'],
+        discard: ['collecte'],
+        memFree: 11
+      });
+      configureDemoPlayer(orange, {
+        hand: ['pollution', 'glouton', 'hotfix', 'ram'],
+        discard: ['purge'],
+        memFree: 11
+      });
+      game.phase = PHASES.ACTION;
+      addDemoHistory(game, [
+        'Démonstration 1 — Choix de profondeur.',
+        'Joueur Cyan a gardé plusieurs fonctions à profondeur variable.',
+        'Objectif : jouer une fonction et choisir R. Plus R est haut, plus le bonus sera fort, mais plus la pile demandera de mémoire dans les prochains tours.'
+      ]);
+      break;
+
+    case 'base_not_end':
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('factorielle', 2, { frames: [2, 1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['collecte', 'purge', 'sentinelle', 'ram'],
+        discard: ['swap'],
+        memFree: 6
+      });
+      configureDemoPlayer(orange, {
+        hand: ['pollution', 'stack_spike', 'hotfix', 'glouton'],
+        memFree: 11
+      });
       game.phase = PHASES.UPDATE;
-      logAction(game, 'Situation de démonstration : overflow proche.', 'sys');
+      addDemoHistory(game, [
+        'Démonstration 2 — Le cas de base n’est pas la fin.',
+        'Joueur Cyan a lancé Fonction Factorielle avec R=2.',
+        'Deux mises à jour ont empilé [1] puis [0].',
+        'Prochaine action : mettre à jour la fonction. Le cadre [0] déclenche le cas de base, puis la fonction continuera avec [2] et [1] à dépiler.'
+      ]);
       break;
-    case 'broken':
-      game.players[0].active = [
-        { ...createFunctionFrame(CARD_DEFINITIONS.compactage, 3), broken: true, frames: [3, 2, 'P'], memUsed: 4 }
-      ];
-      game.players[0].memFree = 7;
+
+    case 'strategic_memory':
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('factorielle', 2, { frames: [2], reachedZero: false, nextValue: 1 }),
+          demoFunction('compactage', 1, { frames: [1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['purge', 'collecte', 'ram'],
+        discard: ['pollution'],
+        memTotal: 8,
+        memFree: 1
+      });
+      configureDemoPlayer(orange, {
+        hand: ['stack_spike', 'injection', 'glouton', 'hotfix'],
+        memFree: 11
+      });
+      game.phase = PHASES.UPDATE;
+      addDemoHistory(game, [
+        'Démonstration 3 — Choix stratégique avec 1 mémoire libre.',
+        'Joueur Cyan a seulement 1 ML.',
+        'Fonction Factorielle doit payer 1 ML pour empiler.',
+        'Compactage Mémoire est sur [0] : son cas de base rend 1 ML.',
+        'Objectif : choisir l’ordre des mises à jour pour comprendre comment la mémoire libre change le tour.'
+      ]);
+      break;
+
+    case 'repair_or_clean':
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('quicksort', 3, { broken: true, frames: [3, 2, 1, 'P'], reachedZero: false })
+        ],
+        hand: ['hotfix', 'collecte', 'debug', 'purge'],
+        discard: ['swap'],
+        memFree: 6
+      });
+      configureDemoPlayer(orange, {
+        hand: ['pollution', 'factorielle', 'ram', 'injection'],
+        memFree: 11
+      });
       game.phase = PHASES.ACTION;
-      logAction(game, 'Situation de démonstration : fonction cassée en jeu.', 'sys');
+      addDemoHistory(game, [
+        'Démonstration 4 — Nettoyer ou réparer une fonction cassée.',
+        'Joueur Cyan a cassé Quicksort Agressif : la fonction ne progresse plus mais occupe encore sa mémoire.',
+        'Hotfix répare la fonction avec son cadre initial seulement.',
+        'Collecte Incrémentale nettoie la fonction, libère toute sa mémoire, puis pioche 1 carte.',
+        'Débogueur pas à pas permet de dépiler le sommet sans effet.'
+      ]);
       break;
-    case 'pollution':
-      game.players[0].active = [createFunctionFrame(CARD_DEFINITIONS.recherche, 2)];
-      game.players[0].memFree = 9;
-      game.players[1].active = [
-        { ...createFunctionFrame(CARD_DEFINITIONS.tri_fusion, 3), frames: [3, 2, 1, 'P'], memUsed: 5 }
-      ];
-      game.players[1].memFree = 6;
+
+    case 'ram':
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('factorielle', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 }),
+          demoFunction('compactage', 1, { frames: [1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['ram', 'expansion', 'purge', 'sentinelle'],
+        discard: ['collecte'],
+        memTotal: 10,
+        memFree: 3
+      });
+      configureDemoPlayer(orange, {
+        hand: ['pollution', 'stack_spike', 'hotfix', 'glouton'],
+        memFree: 11
+      });
       game.phase = PHASES.ACTION;
-      logAction(game, 'Démonstration : pollution de cache déjà appliquée.', 'sys');
+      addDemoHistory(game, [
+        'Démonstration 5 — Barrette RAM.',
+        'Joueur Cyan a deux fonctions actives et seulement 3 ML.',
+        'Barrette RAM coûte 3, reste en Hardware, puis augmente la mémoire totale et la mémoire libre de 4.',
+        'Objectif : jouer Barrette RAM puis observer la mémoire totale, la mémoire libre et la mémoire utilisée.'
+      ]);
       break;
-    case 'victory':
-      game.players[0].score = 11;
-      game.players[0].completed = [{ key: 'factorielle', name: 'Fonction Factorielle' }, { key: 'recherche', name: 'Recherche Dichotomique' }, { key: 'sentinelle', name: 'Routine Sentinelle' }];
-      game.phase = PHASES.GAME_OVER;
-      game.winner = 0;
-      logAction(game, 'Démonstration : victoire par score et fonctions distinctes.', 'good');
+
+    case 'stack_spike_break':
+      configureDemoPlayer(cyan, {
+        hand: ['stack_spike', 'injection', 'pollution', 'factorielle'],
+        discard: ['purge'],
+        memFree: 8
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('tri_fusion', 4, { frames: [4, 3, 2, 1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['hotfix', 'collecte', 'ram', 'sentinelle'],
+        discard: ['purge'],
+        memFree: 4
+      });
+      game.phase = PHASES.ACTION;
+      addDemoHistory(game, [
+        'Démonstration 6 — Casse avec Stack Spike.',
+        'Joueur Orange contrôle Tri Fusion Tempéré avec exactement 5 cadres.',
+        'Joueur Cyan a Stack Spike en main.',
+        'Objectif : jouer Stack Spike sur cette fonction. L’ajout de parasites force un overflow au 7e cadre et la fonction casse.'
+      ]);
       break;
+
     default:
-      break;
+      return loadDemoScenario('depth_choice');
   }
-  game.phase = game.phase ?? PHASES.UPDATE;
+
+  game.players.forEach((player) => {
+    player.updatedThisTurn = player.updatedThisTurn || [];
+    player.planifierUsed = false;
+    player.overclockTarget = null;
+    player.overclockUsed = false;
+    player.swapActive = false;
+    player.tempMemory = 0;
+    player.rebootedThisTurn = false;
+    player.completedThisTurn = false;
+  });
+
   gameState = game;
   return game;
+}
+
+function createDemoGame() {
+  const game = createGameState('Joueur Cyan', 'Joueur Orange');
+  game.turn = 3;
+  game.currentPlayerIndex = 0;
+  game.phase = PHASES.ACTION;
+  game.winner = null;
+  game.firstTurn = false;
+  game.remoteCode = null;
+  game.isRemote = false;
+  game.apiAvailable = false;
+  game.log = [];
+  return game;
+}
+
+function configureDemoPlayer(player, options = {}) {
+  const handKeys = options.hand || [];
+  const activeFunctions = options.active || [];
+  const hardwareKeys = options.hardware || [];
+  const discardKeys = options.discard || [];
+  const usedKeys = [
+    ...handKeys,
+    ...activeFunctions.map((func) => func.cardKey),
+    ...hardwareKeys,
+    ...discardKeys
+  ];
+  const decks = buildRemainingDemoDecks(usedKeys);
+
+  player.score = options.score || 0;
+  player.completed = options.completed || [];
+  player.memTotal = options.memTotal || 11;
+  player.hand = handKeys.map((key) => createCard(key)).filter(Boolean);
+  player.active = activeFunctions;
+  player.hardware = hardwareKeys.map((key) => createCard(key)).filter(Boolean);
+  player.discard = discardKeys.map((key) => createCard(key)).filter(Boolean);
+  player.functionsDeck = decks.functions;
+  player.systemDeck = decks.system;
+  player.memFree = options.memFree ?? Math.max(0, player.memTotal - getPlayerUsedMemory(player));
+}
+
+function buildRemainingDemoDecks(usedKeys) {
+  const remaining = new Map(DECK_COMPOSITION);
+  usedKeys.forEach((key) => {
+    if (!remaining.has(key)) return;
+    remaining.set(key, Math.max(0, remaining.get(key) - 1));
+  });
+
+  const functions = [];
+  const system = [];
+  DECK_COMPOSITION.forEach(([key]) => {
+    const count = remaining.get(key) || 0;
+    for (let i = 0; i < count; i += 1) {
+      const card = createCard(key);
+      if (!card) continue;
+      if (card.type === 'Fonction') functions.push(card);
+      else system.push(card);
+    }
+  });
+
+  return { functions, system };
+}
+
+function demoFunction(key, R, overrides = {}) {
+  const func = createFunctionFrame(CARD_DEFINITIONS[key], R);
+  const frames = overrides.frames || func.frames;
+  const reachedZero = overrides.reachedZero ?? frames.includes(0);
+  return {
+    ...func,
+    frames,
+    nextValue: overrides.nextValue ?? inferNextValue(frames, reachedZero),
+    reachedZero,
+    broken: Boolean(overrides.broken),
+    memUsed: overrides.memUsed ?? estimateFunctionMemory(CARD_DEFINITIONS[key], frames)
+  };
+}
+
+function inferNextValue(frames, reachedZero) {
+  if (reachedZero) return -1;
+  const numericFrames = frames.filter((frame) => frame !== 'P');
+  const last = numericFrames[numericFrames.length - 1];
+  return Number.isInteger(last) ? last - 1 : 0;
+}
+
+function estimateFunctionMemory(card, frames) {
+  return card.cost + frames.slice(1).filter((frame) => frame !== 'P').length;
+}
+
+function addDemoHistory(game, entries) {
+  entries.forEach((entry) => logAction(game, entry, 'sys'));
 }

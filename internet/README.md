@@ -10,6 +10,16 @@ Ouvrir simplement :
 internet/index.html
 ```
 
+## Version V2
+
+La nouvelle version web V2 est disponible dans :
+
+```text
+internet/v2/public/index.html
+```
+
+Elle propose une architecture modulaire, un moteur centralisé, un journal d’actions, une aide intégrée et une API PHP/MySQL optionnelle.
+
 Le fichier fonctionne sans serveur et sans installation.
 
 ## Fonctionnalités V1.1

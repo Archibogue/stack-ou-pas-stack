@@ -18,7 +18,8 @@ function createElement(tag, props = {}, children = []) {
     if (key === 'className') element.className = value;
     else if (key.startsWith('on') && typeof value === 'function') element.addEventListener(key.slice(2).toLowerCase(), value);
     else if (key === 'textContent') element.textContent = value;
-    else element.setAttribute(key, value);
+    else if (key === 'disabled') element.disabled = Boolean(value);
+    else if (value !== false && value !== null && value !== undefined) element.setAttribute(key, value === true ? '' : value);
   });
   children.flat().forEach((child) => { if (typeof child === 'string') element.append(child); else if (child) element.appendChild(child); });
   return element;
@@ -35,7 +36,8 @@ function showHomeScreen() {
       createElement('button', { className: 'primary', onclick: () => promptNewGame() }, ['Nouvelle partie locale']),
       createElement('button', { onclick: () => loadLocalGame() }, ['Charger sauvegarde']),
       createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
-      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON'])
+      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
+      createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles complètes'])
     ])
   ]);
 
@@ -50,12 +52,14 @@ function showHomeScreen() {
 
   const demoPanel = createElement('div', { className: 'panel panel-body' }, [
     createElement('h2', { textContent: 'Mode démonstration' }),
-    createElement('p', { textContent: 'Charger une situation pédagogique préparée.' }),
+    createElement('p', { textContent: 'Charger une situation pédagogique préparée, avec mains cohérentes et journal d’actions.' }),
     createElement('div', { className: 'phase-actions' }, [
-      createElement('button', { onclick: () => loadDemo('overflow') }, ['Overflow']),
-      createElement('button', { onclick: () => loadDemo('broken') }, ['Fonction cassée']),
-      createElement('button', { onclick: () => loadDemo('pollution') }, ['Pollution']),
-      createElement('button', { onclick: () => loadDemo('victory') }, ['Victoire'])
+      createElement('button', { onclick: () => loadDemo('depth_choice') }, ['1. Choix profondeur']),
+      createElement('button', { onclick: () => loadDemo('base_not_end') }, ['2. Cas de base']),
+      createElement('button', { onclick: () => loadDemo('strategic_memory') }, ['3. Choix mémoire']),
+      createElement('button', { onclick: () => loadDemo('repair_or_clean') }, ['4. Nettoyer / réparer']),
+      createElement('button', { onclick: () => loadDemo('ram') }, ['5. Barrette RAM']),
+      createElement('button', { onclick: () => loadDemo('stack_spike_break') }, ['6. Stack Spike'])
     ])
   ]);
 
@@ -153,7 +157,8 @@ function renderGameScreen() {
       createElement('button', { onclick: () => showHomeScreen() }, ['Retour accueil']),
       createElement('button', { onclick: () => saveGame() }, ['Sauvegarder local']),
       createElement('button', { onclick: () => exportGameJson() }, ['Exporter JSON']),
-      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON'])
+      createElement('button', { onclick: () => importGameJson() }, ['Importer JSON']),
+      createElement('a', { className: 'button-link', href: 'regles.html' }, ['Règles complètes'])
     ])
   ]);
 
@@ -250,14 +255,18 @@ function renderFunctionCard(player, fn) {
 function renderCard(player, card) {
   const state = getState();
   const enabled = canPlayCard() && state.currentPlayerIndex === player.index;
-  return createElement('div', { className: `card ${card.type.toLowerCase()}` }, [
+  const children = [
     createElement('div', { className: 'meta', textContent: `${card.type} — coût ${card.cost}` }),
     createElement('h3', { className: 'title', textContent: card.name }),
+    card.type === 'Fonction'
+      ? createElement('div', { className: 'card-rule', textContent: `${card.mode === 'fixe' ? 'Empiler' : 'Empiler jusqu’à'} ${card.maxR} — valeur ${card.value}` })
+      : null,
     createElement('div', { className: 'desc', textContent: card.description }),
     createElement('div', { className: 'card-actions' }, [
       createElement('button', { onclick: () => playCardAction(player.index, card.id), disabled: !enabled }, ['Jouer'])
     ])
-  ]);
+  ];
+  return createElement('div', { className: `card ${card.type.toLowerCase()}` }, children);
 }
 
 function renderCenterPanel(state) {
