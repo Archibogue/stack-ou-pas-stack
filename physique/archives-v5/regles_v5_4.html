@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neon Stack — Règles V5.4 harmonisées</title>
+  <style>
+    :root{--bg:#0a0f17;--bg2:#121b28;--panel:rgba(16,24,36,.82);--panel2:rgba(20,30,46,.9);--text:#edf2ff;--muted:#b8c4dd;--cyan:#53d0ff;--orange:#ffb45f;--rose:#ff8d8d;--line:rgba(255,255,255,.12);--shadow:0 18px 50px rgba(0,0,0,.35);--radius:22px}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at top, rgba(83,208,255,.12), transparent 34%),radial-gradient(circle at right, rgba(255,180,95,.10), transparent 28%),linear-gradient(180deg, var(--bg), #0e1521 35%, var(--bg2));line-height:1.6}
+    .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 70px}.hero,.panel{background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .hero{padding:30px 32px;margin-bottom:24px;overflow:hidden;position:relative}.hero:before{content:"";position:absolute;inset:auto -80px -80px auto;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle, rgba(83,208,255,.18), transparent 70%)}
+    h1,h2,h3{line-height:1.15;margin:0 0 14px}h1{font-size:clamp(2rem,4vw,3.2rem)}h2{font-size:1.45rem;color:var(--cyan);margin-top:26px}h3{font-size:1.08rem;color:var(--orange);margin-top:18px}
+    p,li{font-size:1rem;color:var(--text)}.lede{font-size:1.08rem;color:var(--muted);max-width:72ch}.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.chip{padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--muted);font-size:.95rem}
+    .layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px}.toc{position:sticky;top:18px;padding:18px 18px 20px;height:fit-content;background:var(--panel2)}.toc h2{font-size:1rem;margin:0 0 10px;color:var(--orange)}.toc ol{margin:0;padding-left:18px}.toc li{margin:6px 0;color:var(--muted)}.toc a{color:inherit;text-decoration:none}.toc a:hover{color:var(--text)}
+    .content{padding:26px 28px;background:var(--panel2)}.rule{padding:18px 0;border-top:1px solid var(--line)}.rule:first-child{border-top:0;padding-top:0}
+    ul,ol{padding-left:22px}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:rgba(255,255,255,.08);padding:.15rem .35rem;border-radius:8px}
+    .note,.example,.warning{border-radius:18px;padding:16px 18px;margin:16px 0;border:1px solid var(--line)}.note{background:rgba(83,208,255,.08)}.example{background:rgba(255,180,95,.08)}.warning{background:rgba(255,141,141,.08)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}.stat{padding:16px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid var(--line)}.stat .k{font-size:.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.stat .v{font-size:1.55rem;font-weight:700;margin-top:6px}
+    table{width:100%;border-collapse:collapse;margin:14px 0;background:rgba(255,255,255,.03);border-radius:16px;overflow:hidden}th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{background:rgba(255,255,255,.05);color:var(--orange)}tr:last-child td{border-bottom:0}.footer{margin-top:22px;color:var(--muted);font-size:.95rem}
+    @media (max-width:900px){.layout{grid-template-columns:1fr}.toc{position:static}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Neon Stack — Règles V5.4 harmonisées</h1>
+      <p class="lede">Cette version conserve la structure V5.3 et ajoute la règle d’épuisement validée : quand les deux piles sont vides, on perd progressivement de la mémoire totale au lieu de perdre immédiatement. Si cette perte rend la mémoire utilisée supérieure à la mémoire totale, un reboot forcé a lieu. Le reboot recycle désormais la défausse dans les deux piles selon le type des cartes.</p>
+      <div class="chips">
+        <span class="chip">21 points pour gagner</span>
+        <span class="chip">4 fonctions terminées minimum</span>
+        <span class="chip">3 noms différents minimum</span>
+        <span class="chip">15 mémoire totale</span>
+        <span class="chip">2 pioches distinctes</span>
+        <span class="chip">Bonus Fibonacci</span>
+        <span class="chip">Épuisement progressif</span>
+        <span class="chip">Reboot recyclant</span>
+      </div>
+    </section>
+
+    <div class="layout">
+      <aside class="toc panel">
+        <h2>Sommaire</h2>
+        <ol>
+          <li><a href="#idee">Idée générale</a></li>
+          <li><a href="#victoire">Condition de victoire</a></li>
+          <li><a href="#mise-en-place">Mise en place</a></li>
+          <li><a href="#memoire">Mémoire</a></li>
+          <li><a href="#types">Types de cartes</a></li>
+          <li><a href="#paiement">Paiement et libération</a></li>
+          <li><a href="#limites">Fonctions actives et Hardware</a></li>
+          <li><a href="#cout">Coût mémoire des fonctions</a></li>
+          <li><a href="#maj">Phase de mise à jour</a></li>
+          <li><a href="#empiler">Empiler / Dépiler</a></li>
+          <li><a href="#execution">Cas de base, remontée, terminaison</a></li>
+          <li><a href="#fibo">Récursion et Fibonacci</a></li>
+          <li><a href="#casse">Fonctions cassées</a></li>
+          <li><a href="#reboot">Reboot</a></li>
+          <li><a href="#epuisement">Épuisement</a></li>
+          <li><a href="#parasites">Cadres parasites et overflow</a></li>
+          <li><a href="#interrupts">Interrupts</a></li>
+          <li><a href="#cartes-v53">Cartes V5.3</a></li>
+          <li><a href="#tour">Déroulement d’un tour</a></li>
+        </ol>
+      </aside>
+
+      <main class="content panel">
+        <section class="rule" id="idee">
+          <h2>1. Idée générale</h2>
+          <p>Chaque joueur construit un <strong>programme</strong> en lançant, en faisant évoluer, puis en terminant plusieurs <strong>fonctions</strong>.</p>
+          <p>Le jeu repose sur la mémoire, les piles d’appels, les fonctions cassées, les cadres parasites et les effets de récursion. Il n’y a plus de combat entre unités.</p>
+        </section>
+
+        <section class="rule" id="victoire">
+          <h2>2. Condition de victoire</h2>
+          <p>Un joueur gagne immédiatement s’il atteint <strong>21 points ou plus</strong>, à condition d’avoir terminé au moins <strong>4 fonctions</strong> avec au moins <strong>3 noms de fonctions différents</strong>.</p>
+          <p>Les points sont conservés. Si un joueur dépasse 21 avant de remplir les autres conditions, il ne gagne qu’au moment où une résolution ultérieure le laisse toujours à 21 points ou plus tout en satisfaisant ces conditions.</p>
+        </section>
+
+        <section class="rule" id="mise-en-place">
+          <h2>3. Mise en place</h2>
+          <p>Chaque joueur sépare ses cartes en deux piles :</p>
+          <ul>
+            <li><strong>Pile Fonctions</strong> : uniquement les cartes Fonction</li>
+            <li><strong>Pile Système</strong> : Commandes, Interrupts et Hardware</li>
+          </ul>
+          <p>Ces deux piles sont mélangées séparément.</p>
+          <div class="grid">
+            <div class="stat"><div class="k">Main de départ conseillée</div><div class="v">3 + 2</div></div>
+            <div class="stat"><div class="k">Premier joueur</div><div class="v">Ne pioche pas au tour 1</div></div>
+            <div class="stat"><div class="k">Épuisement</div><div class="v">-1 mémoire totale</div></div>
+          </div>
+          <p>Chaque joueur pioche <strong>5 cartes</strong> au total. Pour la règle de base, on recommande <strong>3 cartes depuis la pile Fonctions</strong> et <strong>2 cartes depuis la pile Système</strong>.</p>
+          <p>Chaque joueur peut effectuer <strong>un mulligan</strong> : il remélange sa main dans ses deux piles, repioche 5 cartes, puis place une carte de sa main sous la pile de son choix.</p>
+        </section>
+
+        <section class="rule" id="memoire">
+          <h2>4. Mémoire</h2>
+          <div class="grid">
+            <div class="stat"><div class="k">Mémoire totale</div><div class="v">15</div></div>
+            <div class="stat"><div class="k">Mémoire libre</div><div class="v">15</div></div>
+            <div class="stat"><div class="k">Fonctions actives max</div><div class="v">3</div></div>
+          </div>
+          <p>La mémoire libre sert à payer les cartes, les appels récursifs supplémentaires et certains effets demandant explicitement un paiement en mémoire.</p>
+          <div class="note"><strong>Idée-clé :</strong> une fonction cassée continue d’occuper la mémoire déjà engagée tant qu’elle n’est pas nettoyée, réparée ou retirée.</div>
+        </section>
+
+        <section class="rule" id="types">
+          <h2>5. Types de cartes</h2>
+          <ul>
+            <li><strong>Fonction</strong> : crée et résout une pile d’appels.</li>
+            <li><strong>Commande</strong> : effet joué pendant ton tour.</li>
+            <li><strong>Interrupt</strong> : effet joué en réaction pendant n’importe quel tour.</li>
+            <li><strong>Hardware</strong> : amélioration matérielle durable.</li>
+          </ul>
+        </section>
+
+
+
+        <section class="rule" id="paiement">
+          <h2>5 bis. Paiement et libération de la mémoire</h2>
+          <p>Quand une carte est jouée, son coût est payé immédiatement en mémoire libre.</p>
+          <ul>
+            <li>Une <strong>Commande</strong> libère sa mémoire dès que son effet est entièrement résolu.</li>
+            <li>Un <strong>Interrupt</strong> libère sa mémoire dès que son effet est entièrement résolu.</li>
+            <li>Un <strong>Hardware</strong> conserve sa mémoire occupée tant qu’il reste en jeu.</li>
+            <li>Une <strong>Fonction</strong> conserve sa mémoire initiale réservée tant qu’elle est active, cassée, réparée ou en cours d’exécution.</li>
+          </ul>
+          <div class="note"><strong>Mémoire libre :</strong> elle ne peut jamais descendre sous 0. Si un effet fait perdre plus de mémoire libre que le joueur n’en possède, elle devient simplement 0.</div>
+        </section>
+
+        <section class="rule" id="limites">
+          <h2>6. Fonctions actives et Hardware</h2>
+          <p>Un joueur peut contrôler au maximum <strong>3 fonctions actives</strong> et <strong>2 Hardware actifs</strong>.</p>
+          <p>Une Fonction active ne peut pas être défaussée volontairement tant qu’elle n’est pas terminée ou cassée, sauf effet de carte. Si un joueur joue un troisième Hardware, il en défausse immédiatement un ancien.</p>
+        </section>
+
+        <section class="rule" id="cout">
+          <h2>7. Coût mémoire des fonctions</h2>
+          <p>Quand une fonction est lancée, son coût mémoire initial est payé en mémoire libre, devient réservé, puis son cadre initial est placé dans sa pile.</p>
+          <p>Chaque empilage supplémentaire coûte <strong>1 mémoire libre</strong>, sauf effet contraire.</p>
+          <p>Quand un cadre récursif normal est dépilé, la mémoire correspondante est libérée. Quand le cadre initial est dépilé, la mémoire initiale réservée par la fonction est libérée. Les cadres parasites ne libèrent jamais de mémoire.</p>
+        </section>
+
+        <section class="rule" id="maj">
+          <h2>8. Phase de mise à jour des fonctions</h2>
+          <p>Au début du tour d’un joueur, toutes ses <strong>fonctions actives non cassées</strong> passent par une <strong>phase de mise à jour</strong>, une par une. Le <strong>joueur actif choisit l’ordre</strong> dans lequel elles sont mises à jour.</p>
+          <ul>
+            <li>Si une fonction n’a pas encore atteint <code>[0]</code>, elle <strong>empile automatiquement</strong> un nouveau cadre.</li>
+            <li>Si une fonction a déjà atteint <code>[0]</code>, elle <strong>dépile automatiquement</strong> son cadre du sommet.</li>
+          </ul>
+          <div class="warning"><strong>Important :</strong> le joueur ne choisit pas entre empiler ou dépiler pendant cette phase. L’état de chaque fonction détermine seul son évolution.</div>
+        </section>
+
+        <section class="rule" id="empiler">
+          <h2>9. Empiler / Dépiler</h2>
+          <h3>Empiler X</h3>
+          <p>Une fonction avec <code>Empiler X</code> a une profondeur cible fixe. Quand elle est lancée, on place son cadre initial <code>[X]</code>, puis à chaque phase de mise à jour elle reçoit successivement <code>[X-1]</code>, <code>[X-2]</code>, etc., jusqu’à <code>[0]</code>.</p>
+          <h3>Empiler jusqu’à X</h3>
+          <p>Le joueur choisit au lancement une profondeur cible comprise entre 0 et X. Le cadre initial porte cette valeur choisie.</p>
+          <h3>Dépiler</h3>
+          <p>Dépiler retire le cadre du sommet d’une pile et applique son effet selon sa nature.</p>
+        </section>
+
+        <section class="rule" id="execution">
+          <h2>10. Cas de base, remontée, terminaison</h2>
+          <p>Le cas de base est le cadre <code>[0]</code> : c’est le dernier cadre empilé normalement et le premier cadre dépilé en phase de remontée.</p>
+          <table>
+            <thead>
+              <tr><th>Moment</th><th>Ce qui s’applique</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Dépilage de <code>[0]</code></td><td><strong>Cas de base</strong></td></tr>
+              <tr><td>Dépilage d’un cadre supérieur à <code>[0]</code></td><td><strong>Remontée</strong></td></tr>
+              <tr><td>Dépilage du cadre initial, pile vide</td><td><strong>Terminaison</strong>, gain de points et bonus Fibonacci</td></tr>
+            </tbody>
+          </table>
+          <p>Une fonction n’est pas terminée quand son cas de base est résolu. Elle l’est seulement lorsque son cadre initial est dépilé et que sa pile devient vide.</p>
+        </section>
+
+        <section class="rule" id="fibo">
+          <h2>11. Récursion et Fibonacci</h2>
+          <p>On note <strong>R</strong> la valeur de récursion fixée au lancement de la fonction. Les cadres parasites et les cadres ajoutés par effet ne modifient pas <strong>R</strong>, sauf mention contraire.</p>
+          <table>
+            <thead>
+              <tr><th>R</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>F(R)</td><td>0</td><td>1</td><td>1</td><td>2</td><td>3</td><td>5</td><td>8</td></tr>
+            </tbody>
+          </table>
+          <p>Quand une fonction se termine, son contrôleur marque ses points de base puis ajoute un bonus égal à <strong>F(R)</strong>.</p>
+        </section>
+
+        <section class="rule" id="casse">
+          <h2>12. Fonctions cassées</h2>
+          <p>Une fonction casse si elle devrait empiler sans pouvoir payer, si elle devrait recevoir un 8e cadre, ou si une carte la casse explicitement.</p>
+          <p>Une fonction cassée reste en jeu, ne peut plus être empilée ni dépilée, ne rapporte aucun point et continue d’occuper sa mémoire.</p>
+          <p><strong>Nettoyer</strong> une fonction cassée consiste à la défausser pour libérer sa mémoire. <strong>Réparer</strong> une fonction cassée consiste à la remettre en état selon le texte de la carte ; par défaut elle revient avec son cadre initial seulement.</p>
+        </section>
+
+        <section class="rule" id="reboot">
+          <h2>13. Reboot</h2>
+          <p>À la place de toute autre action pendant son tour, un joueur peut effectuer un <strong>reboot</strong>.</p>
+          <ul>
+            <li>toutes ses fonctions actives, intactes ou cassées, sont défaussées ;</li>
+            <li>toutes leurs piles sont retirées sans produire d’effet ;</li>
+            <li>la mémoire occupée par les fonctions est libérée ;</li>
+            <li>ses Hardware restent en jeu et continuent d’occuper leur mémoire ;</li>
+            <li>il défausse toute sa main ;</li>
+            <li>il mélange sa défausse dans ses deux piles de pioche selon le type des cartes : les Fonctions retournent dans la pile Fonctions ; les Commandes, Interrupts et Hardware retournent dans la pile Système ;</li>
+            <li>il pioche <strong>5 nouvelles cartes</strong>, si possible ;</li>
+            <li>il ne peut effectuer aucune autre action ce tour-ci.</li>
+          </ul>
+          <div class="note"><strong>Reboot forcé :</strong> si l’épuisement de pioche fait passer la mémoire utilisée au-dessus de la mémoire totale actuelle, le joueur effectue immédiatement un reboot forcé. Il suit les règles normales du reboot, mais il ne remplace pas l’action de conception du tour.</div>
+        </section>
+
+        <section class="rule" id="epuisement">
+          <h2>14. Épuisement de pioche</h2>
+          <p>Si un joueur doit piocher une carte et que ses deux piles sont vides, il ne pioche pas. À la place, il perd <strong>1 mémoire totale</strong>.</p>
+          <ol>
+            <li>Si sa mémoire libre devient supérieure à sa nouvelle mémoire totale, elle est réduite à cette nouvelle valeur.</li>
+            <li>Si sa mémoire utilisée dépasse sa mémoire totale actuelle, il effectue immédiatement un <strong>reboot forcé</strong>.</li>
+            <li>Si sa mémoire totale tombe à <strong>0</strong>, il perd immédiatement la partie.</li>
+          </ol>
+          <p>La <strong>mémoire utilisée</strong> correspond à la mémoire réservée par les Fonctions actives ou cassées, plus la mémoire occupée par les Hardware actifs.</p>
+          <div class="example"><strong>Important :</strong> la pioche F(R) n’est pas plafonnée en V5.4.</div>
+        </section>
+
+        <section class="rule" id="parasites">
+          <h2>15. Cadres parasites et overflow</h2>
+          <p>Un cadre parasite compte pour la taille d’une pile, doit être dépilé normalement, mais n’applique aucun cas de base, aucune remontée, aucune terminaison et ne libère pas de mémoire.</p>
+          <p><strong>Parasite avant [0] :</strong> un cadre parasite ajouté avant que la fonction atteigne <code>[0]</code> ne bloque pas la descente. La fonction continue d’empiler les cadres récursifs attendus jusqu’à <code>[0]</code>. Les parasites seront dépilés pendant la remontée lorsqu’ils arriveront au sommet.</p>
+          <p>Une pile ne peut contenir que <strong>7 cadres</strong>. Si un effet ou une mise à jour devrait ajouter un <strong>8e cadre</strong>, il y a overflow : la fonction concernée casse immédiatement, les ajouts restants ne sont pas appliqués et la pile n’est plus résolue normalement.</p>
+        </section>
+
+        <section class="rule" id="interrupts">
+          <h2>16. Commandes et Interrupts</h2>
+          <p>Les Commandes sont jouées pendant ton tour. Les Interrupts peuvent être joués pendant n’importe quel tour dès que leur condition de déclenchement est remplie.</p>
+          <p>Une Commande ou un Interrupt est payé en mémoire libre au moment où il est joué. Une fois son effet entièrement résolu, la mémoire utilisée pour le payer est <strong>immédiatement libérée</strong>.</p>
+          <p>Quand un événement déclencheur se produit, le joueur non actif a la première possibilité de répondre, puis les joueurs alternent un Interrupt à la fois. Les Interrupts se résolvent ensuite dans l’ordre inverse de leur pose.</p>
+        </section>
+
+
+
+        <section class="rule" id="cartes-v53">
+          <h2>17. Cartes rééquilibrées conservées en V5.4</h2>
+          <h3>Overclocking</h3>
+          <p><strong>Hardware — coût 2.</strong> Au début de chacun de tes tours, tu peux choisir une de tes fonctions. Elle effectue immédiatement une mise à jour supplémentaire. Si elle ne termine pas ce tour-ci, perds 1 mémoire libre à la fin du tour.</p>
+          <p>Cette mise à jour supplémentaire a lieu au début de la phase de mise à jour, avant les mises à jour normales.</p>
+          <h3>Bombe à Retours</h3>
+          <p><strong>Fonction — coût 4 — valeur 3 — Empiler 4.</strong></p>
+          <ul>
+            <li><strong>Cas de base :</strong> pioche 1 carte.</li>
+            <li><strong>Remontée :</strong> au prochain tour adverse, la première fonction adverse mise à jour en phase de descente ignore sa mise à jour.</li>
+            <li><strong>Terminaison :</strong> l’adversaire perd 2 mémoire libre au début de son prochain tour.</li>
+          </ul>
+          <div class="warning">Si plusieurs effets de Bombe à Retours devraient s’appliquer au même tour adverse, un seul de ces effets s’applique.</div>
+        </section>
+
+        <section class="rule" id="tour">
+          <h2>18. Déroulement d’un tour</h2>
+          <ol>
+            <li><strong>Phase de mise à jour</strong> : le joueur actif choisit l’ordre de mise à jour de ses fonctions actives non cassées ; chacune est ensuite mise à jour automatiquement.</li>
+            <li><strong>Pioche</strong> : le joueur pioche 1 carte dans la pile de son choix. Le premier joueur ne pioche pas à son premier tour. Si les deux piles sont vides au moment où il doit piocher, il applique la règle d’épuisement de pioche.</li>
+            <li><strong>Conception</strong> : le joueur peut jouer des Fonctions, des Commandes et des Hardware tant qu’il peut payer leur coût, ou choisir d’effectuer un reboot à la place.</li>
+            <li><strong>Fin de tour</strong> : les effets temporaires cessent ; la mémoire libre temporaire non dépensée disparaît.</li>
+          </ol>
+          <div class="example">
+            <p><strong>Lecture du rythme du jeu :</strong> une fonction descend automatiquement jusqu’à <code>[0]</code>, puis remonte automatiquement au fil des tours. Le joueur agit surtout en choisissant quand la lancer, quand la protéger, quand réparer, quand nettoyer et quand redémarrer son système.</p>
+          </div>
+        </section>
+
+        <p class="footer">Version V5.4 harmonisée. Cette version intègre l’épuisement progressif, le reboot forcé et le recyclage de la défausse dans les deux piles.</p>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

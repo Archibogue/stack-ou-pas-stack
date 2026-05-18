@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stack ou pas Stack — jeu online</title>
+<style>
+:root{
+  --bg:#081018;--panel:#111b28;--panel2:#162437;--line:rgba(255,255,255,.12);--text:#f4f7fb;--muted:#b9c6d6;
+  --cyan:#53d0ff;--orange:#ffb45f;--good:#7ee787;--bad:#ff7b72;--warn:#ffd166;--purple:#c084fc;
+  --shadow:0 18px 40px rgba(0,0,0,.35);--r:18px;
+}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(circle at top left,rgba(83,208,255,.18),transparent 28%),radial-gradient(circle at bottom right,rgba(255,180,95,.14),transparent 32%),linear-gradient(180deg,#071019,#0d1622);color:var(--text);min-height:100vh}button,input,select{font:inherit}.app{max-width:1440px;margin:0 auto;padding:20px}.top{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.title h1{margin:0;font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:.02em}.title p{margin:.2rem 0 0;color:var(--muted)}.toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}button{border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);border-radius:12px;padding:9px 12px;cursor:pointer;transition:.15s}button:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}button.primary{background:linear-gradient(135deg,rgba(83,208,255,.35),rgba(255,180,95,.25));border-color:rgba(255,255,255,.25);font-weight:700}button.good{border-color:rgba(126,231,135,.45);background:rgba(126,231,135,.12)}button.bad{border-color:rgba(255,123,114,.45);background:rgba(255,123,114,.12)}button.warn{border-color:rgba(255,209,102,.45);background:rgba(255,209,102,.12)}button.small{font-size:.85rem;padding:6px 8px;border-radius:10px}button:disabled{opacity:.45;cursor:not-allowed;transform:none}.grid{display:grid;grid-template-columns:1fr 360px 1fr;gap:14px;align-items:start}.player{border:1px solid var(--line);border-radius:var(--r);background:rgba(17,27,40,.82);box-shadow:var(--shadow);overflow:hidden}.player.active{outline:2px solid var(--cyan)}.player.j2.active{outline-color:var(--orange)}.head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px}.name{font-size:1.15rem;font-weight:800}.j1 .name{color:var(--cyan)}.j2 .name{color:var(--orange)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}.stat{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}.stat .k{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.stat .v{font-size:1.2rem;font-weight:800}.area{padding:12px 14px}.area h3{font-size:.9rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin:10px 0 8px}.piles{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pile{border:1px dashed var(--line);border-radius:12px;padding:10px;background:rgba(255,255,255,.03)}.pile strong{display:block}.cards{display:flex;flex-wrap:wrap;gap:8px}.card{width:165px;min-height:150px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.025));border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px}.card.function{border-color:rgba(83,208,255,.4)}.card.command{border-color:rgba(126,231,135,.35)}.card.interrupt{border-color:rgba(255,123,114,.38)}.card.hardware{border-color:rgba(255,209,102,.38)}.ct{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.cn{font-weight:800;line-height:1.1}.cm{font-size:.76rem;color:var(--muted)}.ce{font-size:.76rem;line-height:1.25;color:#dbe5f0;flex:1}.card .actions{margin-top:auto;display:flex;gap:5px;flex-wrap:wrap}.center{border:1px solid var(--line);border-radius:var(--r);background:rgba(13,22,34,.9);box-shadow:var(--shadow);overflow:hidden;position:sticky;top:10px}.phase{padding:14px;border-bottom:1px solid var(--line)}.phase h2{margin:0 0 8px;font-size:1.1rem}.phase .big{font-size:1.45rem;font-weight:900}.steps{display:flex;flex-direction:column;gap:8px;padding:14px}.log{height:300px;overflow:auto;padding:12px 14px;background:#050a10;border-top:1px solid var(--line);font-size:.86rem;line-height:1.35}.log p{margin:.35rem 0}.log .sys{color:var(--muted)}.log .good{color:var(--good)}.log .bad{color:var(--bad)}.log .warn{color:var(--warn)}.programs{display:flex;flex-direction:column;gap:8px}.func{border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.04);padding:10px}.func.broken{border-color:rgba(255,123,114,.55);background:rgba(255,123,114,.08)}.funcTop{display:flex;justify-content:space-between;gap:10px;align-items:start}.funcName{font-weight:900}.funcMeta{font-size:.76rem;color:var(--muted);margin-top:3px}.frames{display:flex;gap:5px;flex-wrap:wrap;margin:9px 0}.frame{min-width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.18);display:grid;place-items:center;background:rgba(83,208,255,.12);font-weight:800}.frame.p{background:rgba(255,123,114,.16);color:#ffd2cf;border-color:rgba(255,123,114,.35)}.hardware{display:flex;flex-wrap:wrap;gap:6px}.chip{padding:6px 8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:.78rem}.discard{color:var(--muted);font-size:.85rem}.modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}.modal{max-width:760px;width:100%;border:1px solid var(--line);border-radius:20px;background:#0e1724;box-shadow:var(--shadow);padding:18px}.modal h2{margin-top:0}.modal .choices{display:flex;gap:10px;flex-wrap:wrap}.modal .choice{min-width:120px}.help{font-size:.9rem;color:var(--muted);line-height:1.45}.kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid var(--line);background:rgba(255,255,255,.06);border-radius:6px;padding:.1rem .35rem}.win{border:1px solid rgba(126,231,135,.55);background:rgba(126,231,135,.1);padding:10px;border-radius:14px;margin-top:10px}.hidden{display:none!important}@media(max-width:1050px){.grid{grid-template-columns:1fr}.center{position:static}.card{width:calc(50% - 4px)}}@media(max-width:620px){.card{width:100%}.stats{grid-template-columns:repeat(2,1fr)}.top{align-items:flex-start;flex-direction:column}.toolbar{justify-content:flex-start}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="title">
+      <h1>Stack ou pas Stack — online</h1>
+      <p>Prototype navigateur — initiation quadratique, mémoire 11, victoire 11, overflow au 7e cadre.</p>
+    </div>
+    <div class="toolbar">
+      <button class="primary" onclick="newGame()">Nouvelle partie</button>
+      <button onclick="saveGame()">Sauvegarder</button>
+      <button onclick="loadGame()">Charger</button>
+      <button onclick="exportState()">Exporter</button>
+      <button onclick="importState()">Importer</button>
+      <button onclick="showHelp()">Aide</button>
+    </div>
+  </div>
+  <div class="grid">
+    <section id="p0" class="player j1"></section>
+    <aside class="center">
+      <div class="phase">
+        <h2>Tour en cours</h2>
+        <div id="turnInfo" class="big">—</div>
+        <p id="phaseInfo" class="help">—</p>
+        <div id="winnerBox"></div>
+      </div>
+      <div class="steps">
+        <button class="primary" id="btnUpdate" onclick="confirmUpdatePhase()">1. Valider la mise à jour</button>
+        <button id="btnDraw" onclick="drawPhase()">2. Phase de pioche</button>
+        <button id="btnEnd" class="warn" onclick="endTurn()">3. Fin de conception</button>
+        <button id="btnReboot" onclick="rebootCurrent(false)" class="bad">Reboot volontaire</button>
+      </div>
+      <div class="phase">
+        <h2>Rappel</h2>
+        <p class="help">Pendant la mise à jour, clique sur chaque fonction à mettre à jour. Elle empile si elle n’a pas atteint <span class="kbd">[0]</span>, sinon elle dépile. La pile casse si elle devrait recevoir un 7e cadre.</p>
+      </div>
+      <div id="log" class="log"></div>
+    </aside>
+    <section id="p1" class="player j2"></section>
+  </div>
+</div>
+
+<div id="modalBackdrop" class="modalBackdrop"><div id="modal" class="modal"></div></div>
+
+<script>
+const BONUS = r => r*r;
+const MAX_FRAMES = 6;
+const START_MEM = 11;
+const WIN_POINTS = 11;
+const MAX_ACTIVE_FUNCTIONS = 3;
+const MAX_HARDWARE = 2;
+function uid(){return (globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():('id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));}
+const cardDefs = {
+  factorielle:{name:'Fonction Factorielle',type:'Fonction',cost:3,value:2,maxR:4,mode:'jusqua',base:'Pioche 1 carte.',up:'Gagne 1 mémoire libre.',term:'Gagne B(R) mémoire libre jusqu’à la fin du tour.'},
+  tri_fusion:{name:'Tri Fusion Tempéré',type:'Fonction',cost:3,value:2,maxR:4,mode:'jusqua',base:'Pioche 1 carte.',up:'Réordonne mentalement les 2 cartes du dessus.',term:'Retire jusqu’à B(R) cadres parasites parmi tes fonctions.'},
+  recherche:{name:'Recherche Dichotomique',type:'Fonction',cost:2,value:2,maxR:3,mode:'fixe',base:'Révèle 3 cartes du dessus d’une pile ; prends-en 1.',up:'Retire 1 cadre parasite.',term:'Révèle B(R)+1 cartes ; prends-en 1.'},
+  sentinelle:{name:'Routine Sentinelle',type:'Fonction',cost:2,value:1,maxR:2,mode:'jusqua',base:'Regarde le dessus d’une pile.',up:'Gagne 1 mémoire libre.',term:'Pioche B(R) carte(s).'},
+  glouton:{name:'Greffon Glouton',type:'Fonction',cost:2,value:1,maxR:3,mode:'jusqua',base:'Pioche 1 carte.',up:'L’adversaire perd 1 mémoire libre.',term:'Ajoute B(R) parasites chez l’adversaire.'},
+  archiviste:{name:'Archiviste du Cache',type:'Fonction',cost:2,value:1,maxR:3,mode:'jusqua',base:'Regarde 2 cartes du dessus.',up:'Gagne 1 mémoire libre.',term:'Pioche B(R), puis défausse 1.'},
+  quicksort:{name:'Quicksort Agressif',type:'Fonction',cost:3,value:2,maxR:4,mode:'jusqua',base:'Regarde 2 cartes ; prends-en 1, défausse l’autre.',up:'L’adversaire perd 1 mémoire libre.',term:'L’adversaire perd B(R) mémoire libre.'},
+  expansion:{name:'Expansion Quadratique',type:'Fonction',cost:3,value:2,maxR:5,mode:'jusqua',base:'Pioche 1 carte.',up:'Gagne 1 mémoire libre.',term:'Gagne B(R) mémoire libre jusqu’à ton prochain tour.'},
+  compactage:{name:'Compactage Mémoire',type:'Fonction',cost:3,value:2,maxR:3,mode:'jusqua',base:'Gagne 1 mémoire libre.',up:'Retire 1 parasite de cette fonction.',term:'Nettoie une fonction cassée. Si B(R) ≥ 2, pioche 1.'},
+  hotfix:{name:'Hotfix',type:'Commande',cost:3,effect:'Répare une de tes fonctions cassées.'},
+  collecte:{name:'Collecte Incrémentale',type:'Commande',cost:2,effect:'Nettoie une de tes fonctions cassées. Pioche 1 carte.'},
+  stack_spike:{name:'Stack Spike',type:'Interrupt',cost:3,effect:'Sur une fonction à 4 ou 5 cadres : ajoute 2 parasites.'},
+  injection:{name:'Injection de Boucle',type:'Interrupt',cost:2,effect:'Ajoute 1 parasite. Le contrôleur paie 1 mémoire, sinon la fonction casse.'},
+  overclock:{name:'Overclocking',type:'Hardware',cost:2,effect:'Une mise à jour supplémentaire par tour ; pénalité si la fonction ne termine pas.'},
+  debug:{name:'Débogueur pas à pas',type:'Interrupt',cost:2,effect:'Sauve une fonction qui vient de casser : dépile le sommet sans effet.'},
+  planificateur:{name:'Planificateur local',type:'Hardware',cost:2,effect:'Une fois par tour, un empilage coûte 1 mémoire de moins.'},
+  ram:{name:'Barrette RAM',type:'Hardware',cost:3,effect:'+4 mémoire totale et +4 mémoire libre.'},
+  pollution:{name:'Pollution de Cache',type:'Commande',cost:2,effect:'Ajoute 2 parasites à une fonction adverse.'},
+  purge:{name:'Purge Contrôlée',type:'Commande',cost:2,effect:'Retire jusqu’à 2 parasites d’une fonction. Si aucun, pioche 1.'},
+  swap:{name:'Swap Brutal',type:'Commande',cost:1,effect:'Gagne 3 mémoire libre temporaire. Si aucune fonction ne termine ce tour, perds 1 mémoire totale.'}
+};
+const deckList = [
+  ['factorielle',2],['tri_fusion',1],['recherche',1],['sentinelle',2],['glouton',2],['archiviste',1],['quicksort',1],['expansion',1],['compactage',1],
+  ['hotfix',1],['collecte',2],['stack_spike',1],['injection',1],['overclock',1],['debug',1],['planificateur',1],['ram',1],['pollution',2],['purge',2],['swap',1]
+];
+let G;
+function makeCard(key){const d=cardDefs[key];return {id:uid(),key,...d};}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function buildDeck(){const f=[],s=[];for(const [key,n] of deckList){for(let i=0;i<n;i++){const c=makeCard(key);(c.type==='Fonction'?f:s).push(c);}}return {functions:shuffle(f),system:shuffle(s)};}
+function makePlayer(name, idx){const d=buildDeck();return {name,idx,score:0,completed:[],memTotal:START_MEM,memFree:START_MEM,functionsDeck:d.functions,systemDeck:d.system,hand:[],active:[],hardware:[],discard:[],updatedThisTurn:[],planUsed:false,overclockUsed:false,overclockTarget:null,swapActive:false,completedThisTurn:false,tempMem:0};}
+function newGame(){
+  const n1 = prompt('Nom du joueur 1 ?', 'Joueur Cyan') || 'Joueur Cyan';
+  const n2 = prompt('Nom du joueur 2 ?', 'Joueur Orange') || 'Joueur Orange';
+  G={players:[makePlayer(n1,0),makePlayer(n2,1)],current:0,turn:1,phase:'setup',log:[],winner:null,firstTurn:true};
+  for(const p of G.players){for(let i=0;i<3;i++)drawCard(p,'functions',true);for(let i=0;i<2;i++)drawCard(p,'system',true);}  
+  log('Nouvelle partie : main de départ 3 Fonctions + 2 Système.', 'sys');
+  beginTurn();
+}
+function current(){return G.players[G.current];}function opponent(){return G.players[1-G.current];}
+function clampMem(p){if(p.memFree>p.memTotal)p.memFree=p.memTotal;if(p.memFree<0)p.memFree=0;if(p.memTotal<0)p.memTotal=0;}
+function usedMemory(p){let u=0;p.active.forEach(f=>u+=f.memUsed);p.hardware.forEach(h=>u+=h.cost);return u;}
+function log(msg, cls=''){if(!G)return;G.log.unshift({msg,cls,t:new Date().toLocaleTimeString()});G.log=G.log.slice(0,180);}
+function drawCard(p,pile,free=false){
+  const arr = pile==='functions'?p.functionsDeck:p.systemDeck;
+  if(arr.length===0){if(!free) exhaustion(p);return null;}
+  const c = arr.shift(); p.hand.push(c); return c;
+}
+function exhaustion(p){
+  if(p.functionsDeck.length===0 && p.systemDeck.length===0){p.memTotal-=1;clampMem(p);log(`${p.name} ne peut plus piocher : -1 mémoire totale.`, 'warn');if(usedMemory(p)>p.memTotal)rebootPlayer(p,true);if(p.memTotal<=0){G.winner=G.players[1-p.idx].idx;log(`${p.name} tombe à 0 mémoire totale. Défaite.`, 'bad');}}
+  else { const fallback=p.functionsDeck.length?'functions':'system'; drawCard(p,fallback,true); log(`${p.name} pioche dans l’autre pile disponible.`, 'warn'); }
+}
+function pay(p,cost){if(p.memFree<cost){alert(`${p.name} n’a pas assez de mémoire libre.`);return false;}p.memFree-=cost;return true;}
+function release(p,cost){p.memFree+=cost;clampMem(p);}
+function cardClass(c){return c.type==='Fonction'?'function':c.type==='Commande'?'command':c.type==='Interrupt'?'interrupt':'hardware';}
+function render(){if(!G)newGame();
+  G.players.forEach((p,i)=>renderPlayer(p,i));
+  document.getElementById('turnInfo').textContent = `${current().name} — tour ${G.turn}`;
+  const pendingUpdate = current().active.filter(f=>!f.broken&&!current().updatedThisTurn.includes(f.id)).length;
+  document.getElementById('phaseInfo').textContent = G.phase==='update'
+    ? (pendingUpdate ? `Phase 1 obligatoire : encore ${pendingUpdate} fonction(s) à mettre à jour.` : 'Phase 1 terminée : valide pour passer à la phase suivante.')
+    : G.phase==='draw'
+      ? 'Phase 2 obligatoire : choisis une pile et pioche 1 carte.'
+      : 'Phase 3 : conception. Tu peux jouer des cartes, faire un reboot ou terminer le tour.';
+  document.getElementById('btnUpdate').disabled = G.phase!=='update' || pendingUpdate>0 || !!G.winner;
+  document.getElementById('btnDraw').disabled = G.phase!=='draw' || !!G.winner;
+  document.getElementById('btnEnd').disabled = G.phase!=='action' || !!G.winner;
+  document.getElementById('btnReboot').disabled = G.phase!=='action' || !!G.winner;
+  document.getElementById('log').innerHTML = G.log.map(x=>`<p class="${x.cls}"><span class="sys">${x.t}</span> ${escapeHtml(x.msg)}</p>`).join('');
+  document.getElementById('winnerBox').innerHTML = G.winner!==null?`<div class="win">Victoire : <strong>${G.players[G.winner].name}</strong></div>`:'';
+}
+function renderPlayer(p,i){const root=document.getElementById('p'+i);root.className=`player j${i+1} ${G.current===i?'active':''}`;
+  const canAct = G.current===i && G.phase==='action' && !G.winner;
+  root.innerHTML = `
+  <div class="head"><div><div class="name">${escapeHtml(p.name)}</div><div class="help">${i===0?'Cyan':'Orange'} — ${p.completed.length} fonction(s) terminée(s), ${new Set(p.completed).size} nom(s)</div></div><div class="discard">Défausse ${p.discard.length}</div></div>
+  <div class="stats"><div class="stat"><div class="k">Score</div><div class="v">${p.score}</div></div><div class="stat"><div class="k">ML / MT</div><div class="v">${p.memFree}/${p.memTotal}</div></div><div class="stat"><div class="k">Utilisée</div><div class="v">${usedMemory(p)}</div></div><div class="stat"><div class="k">Main</div><div class="v">${p.hand.length}</div></div></div>
+  <div class="area"><div class="piles"><div class="pile"><strong>Pile Fonctions</strong>${p.functionsDeck.length} carte(s)<br><button class="small" ${G.current===i&&G.phase==='draw'?'':'disabled'} onclick="drawFrom('${i}','functions')">Piocher</button></div><div class="pile"><strong>Pile Système</strong>${p.systemDeck.length} carte(s)<br><button class="small" ${G.current===i&&G.phase==='draw'?'':'disabled'} onclick="drawFrom('${i}','system')">Piocher</button></div></div></div>
+  <div class="area"><h3>Programmes / fonctions actives</h3><div class="programs">${p.active.map(f=>renderFunc(p,f,i)).join('') || '<p class="help">Aucune fonction active.</p>'}</div></div>
+  <div class="area"><h3>Hardware</h3><div class="hardware">${p.hardware.map(h=>`<span class="chip">${escapeHtml(h.name)}</span>`).join('') || '<span class="help">Aucun.</span>'}</div></div>
+  <div class="area"><h3>Main</h3><div class="cards">${p.hand.map(c=>renderCard(c,p,canAct)).join('')}</div></div>`;
+}
+function renderCard(c,p,canAct){return `<div class="card ${cardClass(c)}"><div class="ct">${c.type} ${c.cost!==undefined?'— coût '+c.cost:''}</div><div class="cn">${escapeHtml(c.name)}</div><div class="cm">${c.type==='Fonction'?`valeur ${c.value} — ${c.mode==='fixe'?'Empiler '+c.maxR:'Empiler jusqu’à '+c.maxR}`:''}</div><div class="ce">${escapeHtml(c.effect||c.term||c.base||'')}</div><div class="actions"><button class="small good" ${canAct?'':'disabled'} onclick="playCard('${p.idx}','${c.id}')">Jouer</button></div></div>`;}
+function renderFunc(p,f,pi){return `<div class="func ${f.broken?'broken':''}"><div class="funcTop"><div><div class="funcName">${escapeHtml(f.name)} ${f.broken?'— CASSÉE':''}</div><div class="funcMeta">R=${f.R}, valeur ${f.value}, mémoire ${f.memUsed}, ${f.reachedZero?'remontée':'descente'}</div></div><button class="small" ${G.current===pi&&G.phase==='update'&&!f.broken&&!G.winner&&!p.updatedThisTurn.includes(f.id)?'':'disabled'} onclick="updateFunction('${pi}','${f.id}')">Mettre à jour</button></div><div class="frames">${f.frames.map(fr=>`<span class="frame ${fr==='P'?'p':''}">${fr}</span>`).join('')}</div><div class="actions"><button class="small" ${G.current===pi&&G.phase==='update'&&hasHardware(p,'overclock')&&!p.overclockUsed&&!f.broken?'':'disabled'} onclick="overclockFunction('${pi}','${f.id}')">Overclock</button></div></div>`;}
+function beginTurn(){const p=current();p.updatedThisTurn=[];p.planUsed=false;p.overclockUsed=false;p.overclockTarget=null;p.completedThisTurn=false;G.phase='update';log(`Début du tour de ${p.name} : phase 1, mise à jour obligatoire.`, 'sys');const todo=p.active.filter(f=>!f.broken);if(todo.length===0){log(`${p.name} n’a aucune fonction à mettre à jour.`, 'sys');confirmUpdatePhase();}else render();}
+function confirmUpdatePhase(){if(G.phase!=='update'||G.winner)return;const p=current();const todo=p.active.filter(f=>!f.broken&&!p.updatedThisTurn.includes(f.id));if(todo.length>0){alert('Tu dois d’abord mettre à jour toutes tes fonctions actives non cassées.');return;}advanceAfterUpdate();}
+function advanceAfterUpdate(){if(G.firstTurn && G.turn===1 && G.current===0){G.firstTurn=false;G.phase='action';log('Premier joueur : phase de pioche sautée au premier tour. Phase 3, conception.', 'sys');}else{G.phase='draw';log('Phase 2 obligatoire : pioche 1 carte dans une pile.', 'sys');}render();}
+function drawFrom(idx,pile){if(G.phase!=='draw'||G.winner)return;const p=G.players[Number(idx)];if(p.idx!==G.current)return;const c=drawCard(p,pile);if(c)log(`${p.name} pioche ${c.name}.`);G.phase='action';log('Phase 3 : conception.', 'sys');render();}
+function drawPhase(){if(G.phase!=='draw'||G.winner)return;alert('Choisis une pile Fonctions ou Système dans la zone du joueur actif.');}
+function finishUpdateIfDone(){const p=current();const todo=p.active.filter(f=>!f.broken&&!p.updatedThisTurn.includes(f.id));if(todo.length===0){log('Toutes les fonctions ont été mises à jour. Tu peux valider la phase 1.', 'sys');}}
+function updateFunction(pi,fid,extra=false){if(G.phase!=='update'||G.winner)return;const p=G.players[Number(pi)];if(p.idx!==G.current)return;const f=p.active.find(x=>x.id===fid);if(!f||f.broken)return;doUpdate(p,f,extra);if(!extra&&!p.updatedThisTurn.includes(f.id))p.updatedThisTurn.push(f.id);checkWin(p);finishUpdateIfDone();render();}
+function overclockFunction(pi,fid){if(G.phase!=='update'||G.winner)return;const p=G.players[Number(pi)];if(p.idx!==G.current)return;const f=p.active.find(x=>x.id===fid);if(!hasHardware(p,'overclock')||p.overclockUsed||!f||f.broken)return;p.overclockUsed=true;p.overclockTarget=f.id;log(`${p.name} utilise Overclocking sur ${f.name}.`, 'warn');doUpdate(p,f,true);checkWin(p);render();}
+function doUpdate(p,f,extra=false){if(f.broken)return;
+  if(!f.reachedZero){
+    const next=f.nextValue;
+    const cost=(hasHardware(p,'planificateur')&&!p.planUsed)?0:1;
+    if(f.frames.length+1>=7){breakFunction(p,f,`overflow au 7e cadre`);return;}
+    if(p.memFree<cost){breakFunction(p,f,`mémoire insuffisante`);return;}
+    p.memFree-=cost; if(cost===0 && hasHardware(p,'planificateur'))p.planUsed=true;
+    f.frames.push(next); f.memUsed+=1; log(`${p.name} empile [${next}] sur ${f.name}${cost===0?' gratuitement grâce au Planificateur local':''}.`);
+    if(next===0)f.reachedZero=true; f.nextValue-=1;
+  } else {
+    const top=f.frames.pop(); log(`${p.name} dépile ${top==='P'?'un parasite':'['+top+']'} de ${f.name}.`);
+    if(top==='P'){/* rien */}
+    else {
+      if(top!==f.R){f.memUsed-=1; release(p,1);} // frame récursif normal
+      if(top===0)applyBase(p,f); else applyUp(p,f,top);
+    }
+    if(f.frames.length===0)completeFunction(p,f);
+  }
+}
+function breakFunction(p,f,why){f.broken=true;log(`${f.name} de ${p.name} casse : ${why}.`, 'bad');}
+function completeFunction(p,f){const gain=f.value+BONUS(f.R);p.score+=gain;p.completed.push(f.name);p.completedThisTurn=true;release(p,f.memUsed);log(`${p.name} termine ${f.name} : ${f.value} + B(${f.R})=${BONUS(f.R)} → ${gain} point(s).`, 'good');applyTerm(p,f);removeFunc(p,f);}
+function removeFunc(p,f){p.active=p.active.filter(x=>x.id!==f.id);p.discard.push({key:f.key,name:f.name,type:'Fonction'});}
+function applyBase(p,f){switch(f.key){case 'factorielle':case 'tri_fusion':case 'glouton':case 'quicksort':case 'expansion':drawOneChoice(p);break;case 'compactage':gainMem(p,1);break;case 'recherche':revealTake(p,3);break;case 'sentinelle':peekPile(p);break;case 'archiviste':peekPile(p,2);break;} }
+function applyUp(p,f,top){switch(f.key){case 'factorielle':case 'sentinelle':case 'archiviste':case 'expansion':case 'compactage':gainMem(p,1);break;case 'glouton':loseMem(opOf(p),1);break;case 'quicksort':loseMem(opOf(p),1);break;case 'recherche':removeParasitesFromOwn(p,1);break;case 'tri_fusion':log('Tri Fusion : réordonnancement virtuel des 2 cartes du dessus.', 'sys');break;} }
+function applyTerm(p,f){const b=BONUS(f.R);switch(f.key){case 'factorielle':gainMem(p,b);break;case 'sentinelle':drawManyChoice(p,b);break;case 'glouton':addParasitesAuto(opOf(p),b);break;case 'quicksort':loseMem(opOf(p),b);break;case 'expansion':gainMem(p,b);break;case 'tri_fusion':removeParasitesFromOwn(p,b);break;case 'compactage':cleanBrokenAuto(p); if(b>=2)drawOneChoice(p);break;case 'recherche':revealTake(p,b+1);break;case 'archiviste':drawManyChoice(p,b); if(p.hand.length)discardFromHand(p,p.hand[0].id,true);break;} }
+function opOf(p){return G.players[1-p.idx];}
+function gainMem(p,n){p.memFree+=n;clampMem(p);if(n>0)log(`${p.name} gagne ${n} mémoire libre.`, 'good');}
+function loseMem(p,n){p.memFree-=n;clampMem(p);if(n>0)log(`${p.name} perd ${n} mémoire libre.`, 'bad');}
+function drawOneChoice(p){drawManyChoice(p,1);}function drawManyChoice(p,n){for(let i=0;i<n;i++){const pile = p.functionsDeck.length>=p.systemDeck.length?'functions':'system'; const c=drawCard(p,pile); if(c)log(`${p.name} pioche ${c.name}.`);}}
+function revealTake(p,n){const piles=[...p.functionsDeck.slice(0,n),...p.systemDeck.slice(0,n)].slice(0,n);if(!piles.length){log('Recherche : aucune carte à révéler.', 'sys');return;}const taken=piles[0];const pile = p.functionsDeck[0]===taken?'functions':'system';if(pile==='functions')p.functionsDeck.shift();else p.systemDeck.shift();p.hand.push(taken);log(`${p.name} révèle ${n} carte(s) et prend ${taken.name}.`, 'good');}
+function peekPile(p,n=1){log(`${p.name} consulte le dessus d’une pile (${n} carte(s)) — effet simplifié.`, 'sys');}
+function removeParasitesFromOwn(p,n){let removed=0;for(const f of p.active){while(removed<n){const idx=f.frames.indexOf('P');if(idx<0)break;f.frames.splice(idx,1);removed++;}}if(removed)log(`${p.name} retire ${removed} parasite(s).`, 'good');}
+function addParasitesAuto(target,n){let added=0;for(const f of target.active){while(added<n){if(f.frames.length+1>=7){breakFunction(target,f,'overflow au 7e cadre par parasite');break;}f.frames.push('P');added++;}}if(added)log(`${added} parasite(s) ajouté(s) chez ${target.name}.`, 'bad');}
+function cleanBrokenAuto(p){const f=p.active.find(x=>x.broken);if(f){release(p,f.memUsed);p.active=p.active.filter(x=>x.id!==f.id);p.discard.push({key:f.key,name:f.name,type:'Fonction'});log(`${p.name} nettoie ${f.name}.`, 'good');}}
+function playCard(pi,cid){if(G.phase!=='action'||G.winner){alert('Tu ne peux jouer des cartes que pendant la phase 3 : conception.');return;}const p=G.players[Number(pi)];if(p.idx!==G.current)return;const card=p.hand.find(c=>c.id===cid);if(!card)return;if(card.type==='Fonction')return playFunction(p,card);if(card.type==='Hardware')return playHardware(p,card);return playSystem(p,card);}
+function discardFromHand(p,cid,silent=false){const idx=p.hand.findIndex(c=>c.id===cid);if(idx>=0){const [c]=p.hand.splice(idx,1);p.discard.push(c);if(!silent)log(`${p.name} défausse ${c.name}.`, 'sys');}}
+function playFunction(p,c){if(p.active.length>=MAX_ACTIVE_FUNCTIONS){alert('Déjà 3 fonctions actives.');return;}if(!pay(p,c.cost))return;let R=c.mode==='fixe'?c.maxR:Number(prompt(`Profondeur R pour ${c.name} ? 0 à ${c.maxR}`, String(Math.min(2,c.maxR))));if(isNaN(R))R=0;R=Math.max(0,Math.min(c.maxR,R));const f={id:uid(),key:c.key,name:c.name,cost:c.cost,value:c.value,R,frames:[R],nextValue:R-1,reachedZero:R===0,broken:false,memUsed:c.cost};p.active.push(f);discardFromHand(p,c.id,true);log(`${p.name} lance ${c.name} avec R=${R}.`);render();}
+function playHardware(p,c){if(p.hardware.length>=MAX_HARDWARE){if(!confirm('Tu as déjà 2 Hardware. Défausser le plus ancien ?'))return;const old=p.hardware.shift();p.discard.push(old);release(p,old.cost);log(`${p.name} retire ${old.name}.`, 'warn');}if(!pay(p,c.cost))return;p.hardware.push(c);discardFromHand(p,c.id,true);if(c.key==='ram'){p.memTotal+=4;p.memFree+=4;clampMem(p);log(`${p.name} installe Barrette RAM : +4 MT et +4 ML.`, 'good');}else log(`${p.name} installe ${c.name}.`, 'good');render();}
+function playSystem(p,c){if(!pay(p,c.cost))return;let done=true;switch(c.key){case 'collecte':cleanBrokenAuto(p);drawOneChoice(p);break;case 'hotfix':repairBroken(p);break;case 'purge':purgeTarget(p);break;case 'pollution':targetFunction(opOf(p),'Choisir la fonction adverse à polluer',f=>addP(opOf(p),f,2));break;case 'stack_spike':targetFunctionAny('Choisir une fonction à 4 ou 5 cadres',f=>{const owner=findOwner(f); if(f.frames.length===4||f.frames.length===5)addP(owner,f,2);else alert('Stack Spike ne cible que 4 ou 5 cadres.');});break;case 'injection':targetFunctionAny('Choisir une fonction à injecter',f=>{const owner=findOwner(f);addP(owner,f,1);if(owner.memFree>=1){owner.memFree-=1;log(`${owner.name} paie 1 mémoire pour encaisser Injection de Boucle.`,'warn');}else breakFunction(owner,f,'Injection de Boucle sans mémoire disponible');});break;case 'debug':debugBroken(p);break;case 'swap':p.memFree+=3;p.tempMem+=3;p.swapActive=true;log(`${p.name} joue Swap Brutal : +3 mémoire temporaire.`, 'warn');break;default:done=false;}
+  release(p,c.cost);discardFromHand(p,c.id,true);if(done)log(`${p.name} joue ${c.name}.`);render();}
+function hasHardware(p,key){return p.hardware.some(h=>h.key===key);}
+function repairBroken(p){const f=p.active.find(x=>x.broken);if(!f){log('Aucune fonction cassée à réparer.', 'warn');return;}f.broken=false;f.frames=[f.R];f.nextValue=f.R-1;f.reachedZero=f.R===0;f.memUsed=f.cost;log(`${p.name} répare ${f.name}.`, 'good');}
+function purgeTarget(p){let all=[...p.active,...opOf(p).active];let f=all.find(x=>x.frames.includes('P'));if(!f){drawOneChoice(p);log('Purge : aucun parasite, pioche 1 carte.', 'good');return;}let removed=0;while(removed<2){const idx=f.frames.indexOf('P');if(idx<0)break;f.frames.splice(idx,1);removed++;}log(`${p.name} retire ${removed} parasite(s) de ${f.name}.`, 'good');}
+function debugBroken(p){const f=p.active.find(x=>x.broken);if(!f){log('Débogueur : aucune fonction cassée à sauver.', 'warn');return;}const top=f.frames.pop();f.broken=false;if(top!=='P' && top!==f.R){f.memUsed-=1;release(p,1);}if(f.frames.length===0){release(p,f.memUsed);removeFunc(p,f);log(`Débogueur vide la pile de ${f.name} sans points.`, 'warn');}else log(`Débogueur dépile le sommet de ${f.name} sans effet.`, 'good');}
+function targetFunction(player,msg,cb){if(!player.active.length){alert('Aucune fonction cible.');return;}const list=player.active.map((f,i)=>`${i+1}. ${f.name} (${f.frames.length} cadres)`).join('\n');let n=Number(prompt(msg+'\n'+list,'1'))-1;if(player.active[n])cb(player.active[n]);}
+function targetFunctionAny(msg,cb){const all=G.players.flatMap(p=>p.active.map(f=>({p,f})));if(!all.length){alert('Aucune fonction cible.');return;}const list=all.map((x,i)=>`${i+1}. ${x.p.name} — ${x.f.name} (${x.f.frames.length} cadres)`).join('\n');let n=Number(prompt(msg+'\n'+list,'1'))-1;if(all[n])cb(all[n].f);}
+function findOwner(f){return G.players.find(p=>p.active.some(x=>x.id===f.id));}
+function addP(owner,f,n){for(let i=0;i<n;i++){if(f.frames.length+1>=7){breakFunction(owner,f,'overflow au 7e cadre par parasite');return;}f.frames.push('P');}log(`${n} parasite(s) ajouté(s) à ${f.name}.`, 'bad');}
+function endTurn(){if(G.phase!=='action'||G.winner)return;const p=current();if(p.tempMem){p.memFree-=p.tempMem;p.tempMem=0;clampMem(p);}if(p.swapActive&&!p.completedThisTurn){p.memTotal-=1;clampMem(p);log(`${p.name} n’a pas terminé de fonction après Swap Brutal : -1 mémoire totale.`, 'bad');if(usedMemory(p)>p.memTotal)rebootPlayer(p,true);}p.swapActive=false;p.completedThisTurn=false;checkWin(p);if(G.winner!==null){render();return;}G.current=1-G.current;if(G.current===0)G.turn++;beginTurn();}
+function rebootCurrent(forced){if(!forced && (G.phase!=='action'||G.winner)){alert('Le reboot volontaire se fait pendant la phase 3 : conception.');return;}rebootPlayer(current(),forced);render();}
+function rebootPlayer(p,forced=false){for(const f of p.active){p.discard.push({key:f.key,name:f.name,type:'Fonction'});}p.active=[];p.hand.forEach(c=>p.discard.push(c));p.hand=[];const oldDiscard=p.discard.splice(0);for(const c of oldDiscard){const fresh=makeCard(c.key);if(fresh.type==='Fonction')p.functionsDeck.push(fresh);else p.systemDeck.push(fresh);}shuffle(p.functionsDeck);shuffle(p.systemDeck);p.memFree=p.memTotal-usedMemory(p);if(p.memFree<0)p.memFree=0;for(let i=0;i<5;i++){const pile=p.functionsDeck.length>=p.systemDeck.length?'functions':'system';drawCard(p,pile,true);}log(`${p.name} effectue un ${forced?'reboot forcé':'reboot volontaire'}.`, forced?'bad':'warn');}
+function checkWin(p){if(p.score>=WIN_POINTS && p.completed.length>=3 && new Set(p.completed).size>=2){G.winner=p.idx;log(`${p.name} remplit la condition de victoire : ${p.score} points, ${p.completed.length} fonctions, ${new Set(p.completed).size} noms.`, 'good');}}
+function saveGame(){localStorage.setItem('stackOnlineState',JSON.stringify(G));log('Partie sauvegardée dans le navigateur.','sys');render();}
+function loadGame(){const s=localStorage.getItem('stackOnlineState');if(!s){alert('Aucune sauvegarde.');return;}G=JSON.parse(s);log('Partie chargée.','sys');render();}
+function exportState(){const data=JSON.stringify(G);navigator.clipboard?.writeText(data);prompt('Copie de sauvegarde JSON :', data);}
+function importState(){const data=prompt('Coller la sauvegarde JSON :');if(!data)return;try{G=JSON.parse(data);render();}catch(e){alert('JSON invalide.');}}
+function showHelp(){modal(`<h2>Aide rapide</h2><p class="help">Ce prototype applique la base de la variante d’initiation quadratique : mémoire 11, victoire à 11 points, 3 fonctions terminées avec 2 noms différents, B(R)=R², overflow si une fonction devrait recevoir un 7e cadre.</p><ul><li><strong>1. Phase de mise à jour obligatoire</strong> : clique sur chaque fonction active non cassée, puis valide.</li><li><strong>2. Pioche obligatoire</strong> : choisis Fonctions ou Système. Le premier joueur saute cette phase au tout premier tour.</li><li><strong>3. Conception</strong> : joue des cartes depuis ta main, fais éventuellement un reboot, puis termine le tour.</li></ul><p class="help">Les effets complexes de recherche/réordonnancement sont simplifiés pour rester jouables sans serveur ni glisser-déposer avancé.</p><button onclick="closeModal()">Fermer</button>`)}
+function modal(html){document.getElementById('modal').innerHTML=html;document.getElementById('modalBackdrop').style.display='flex';}
+function closeModal(){document.getElementById('modalBackdrop').style.display='none';}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+newGame();
+</script>
+</body>
+</html>
