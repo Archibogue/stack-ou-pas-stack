@@ -21,21 +21,45 @@ function sops_load_config()
         'table_games' => 'sops_games',
     ];
 
+    // 1. Configuration locale dédiée à l’API, si elle existe.
+    // Exemple : /sops/api/config.php
     $localConfigPath = __DIR__ . '/config.php';
+
     if (is_file($localConfigPath)) {
         $localConfig = require $localConfigPath;
+
         if (!is_array($localConfig)) {
             sops_config_error('Configuration API invalide.');
         }
+
         return sops_validate_config(array_merge($defaults, $localConfig));
     }
 
+    // 2. Cas spécifique à ton hébergement :
+    // /sops/api/db.php
+    // /public_html/wp-config.php
+    $explicitWpConfigPath = realpath(__DIR__ . '/../../public_html/wp-config.php');
+
+    if ($explicitWpConfigPath && is_file($explicitWpConfigPath)) {
+        $wpConfig = sops_parse_wp_config($explicitWpConfigPath);
+
+        return sops_validate_config(array_merge($defaults, [
+            'db_host' => $wpConfig['DB_HOST'],
+            'db_name' => $wpConfig['DB_NAME'],
+            'db_user' => $wpConfig['DB_USER'],
+            'db_pass' => $wpConfig['DB_PASSWORD'],
+        ]));
+    }
+
+    // 3. Recherche automatique classique.
     $wpConfigPath = sops_find_wp_config(__DIR__);
+
     if ($wpConfigPath === null) {
         sops_config_error('Configuration API manquante : ajoutez api/config.php ou placez le jeu sous un WordPress avec wp-config.php.');
     }
 
     $wpConfig = sops_parse_wp_config($wpConfigPath);
+
     return sops_validate_config(array_merge($defaults, [
         'db_host' => $wpConfig['DB_HOST'],
         'db_name' => $wpConfig['DB_NAME'],
