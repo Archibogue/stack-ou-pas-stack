@@ -508,7 +508,7 @@ function renderRemoteLocalConsole(player) {
       ]),
       createElement('div', { className: 'remote-local-functions' }, [
         createElement('div', { className: 'remote-zone-head' }, [
-          createElement('strong', { textContent: 'Vos fonctions' }),
+          createElement('strong', { textContent: 'Fonctions actives' }),
           createElement('span', { className: 'chip', textContent: `${player.functionsDeck.length} F · ${player.systemDeck.length} S · def. ${player.discard.length}` })
         ]),
         createElement('div', { className: 'remote-function-row' }, player.active.length
@@ -516,6 +516,10 @@ function renderRemoteLocalConsole(player) {
           : [emptyState('Aucune fonction')])
       ]),
       createElement('div', { className: 'remote-hand-dock' }, [
+        createElement('div', { className: 'remote-zone-head' }, [
+          createElement('strong', { textContent: 'Main' }),
+          createElement('span', { className: 'chip', textContent: `${player.hand.length} carte(s)` })
+        ]),
         createElement('div', { className: 'hand-cards remote-hand-cards', style: `--cards:${Math.max(1, player.hand.length)}` }, player.hand.length
           ? player.hand.map((card, index) => renderCard(player, card, index, { compact: true, previewOnClick: true }))
           : [emptyState('Main vide')])

@@ -569,6 +569,7 @@ p {
 .remote-local-functions,
 .remote-hand-dock {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   gap: 6px;
 }
@@ -779,8 +780,8 @@ p {
 
 .remote-local-console .panel-body {
   display: grid;
-  grid-template-columns: minmax(132px, 0.2fr) minmax(0, 1fr);
-  grid-template-rows: minmax(150px, 1fr) minmax(138px, 0.58fr);
+  grid-template-columns: minmax(132px, 0.2fr) repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   height: 100%;
   min-height: 0;
@@ -826,12 +827,11 @@ p {
 }
 
 .remote-hand-dock {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: end;
+  grid-column: 3;
+  grid-row: 1;
   overflow: hidden;
-  border-top: 1px solid var(--line);
-  padding-top: 4px;
+  border-left: 1px solid var(--line);
+  padding-left: 10px;
 }
 
 .remote-game .remote-hand-cards {
@@ -841,9 +841,10 @@ p {
   align-items: flex-end;
   justify-content: center;
   gap: 0;
-  min-height: 98px;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
-  padding: 0 28px 6px;
+  padding: 18px 28px 6px;
 }
 
 .remote-game .remote-hand-cards .compact-card {
@@ -2230,6 +2231,15 @@ select {
     grid-template-columns: minmax(112px, 0.28fr) minmax(0, 1fr);
     grid-template-rows: minmax(132px, 1fr) minmax(112px, 0.58fr);
     padding: 6px;
+  }
+
+  .remote-hand-dock {
+    grid-column: 2;
+    grid-row: 2;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding-top: 4px;
+    padding-left: 0;
   }
 
   .remote-local-status {
