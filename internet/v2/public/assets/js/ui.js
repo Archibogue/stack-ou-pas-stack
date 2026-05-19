@@ -1,5 +1,5 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
@@ -12,6 +12,7 @@ let remotePollPausedUntil = 0;
 let lastSeenLogOrder = 0;
 let lastCounterSnapshot = null;
 let counterDeltas = new Map();
+let openPendingDeckEffectId = null;
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -537,6 +538,7 @@ function renderGameScreen() {
   if (!remoteMode) app.append(renderHelpPanel());
   lastCounterSnapshot = buildCounterSnapshot(state);
   counterDeltas = new Map();
+  maybeOpenPendingDeckEffect();
 }
 
 function renderRemoteBoard(state) {
@@ -1311,14 +1313,7 @@ function applyUpdate(functionId) {
 }
 
 function maybeShowPeekDecision(player, cardKey, poppedFrame, wasUnwinding) {
-  if (!wasUnwinding) return;
-  if (poppedFrame === 0 && cardKey === 'sentinelle') {
-    showPeekDecision(player, 1, false, 'Routine Sentinelle');
-  } else if (poppedFrame === 0 && cardKey === 'archiviste') {
-    showPeekDecision(player, 2, false, 'Archiviste du Cache');
-  } else if (poppedFrame !== 0 && cardKey === 'tri_fusion') {
-    showPeekDecision(player, 2, true, 'Tri Fusion Tempéré');
-  }
+  maybeOpenPendingDeckEffect();
 }
 
 function showPeekDecision(player, count, allowBottom, sourceName) {
@@ -1332,6 +1327,88 @@ function showPeekDecision(player, count, allowBottom, sourceName) {
     allowBottom,
     topLabel: 'Laisser au-dessus'
   });
+}
+
+function maybeOpenPendingDeckEffect() {
+  const effect = getPendingDeckEffect();
+  if (!effect) {
+    openPendingDeckEffectId = null;
+    return;
+  }
+  if (!canControlPlayer(effect.ownerIndex)) return;
+  if (openPendingDeckEffectId === effect.id && !modal.classList.contains('hidden')) return;
+  openPendingDeckEffectId = effect.id;
+  showPendingDeckTargetChoice(effect);
+}
+
+function showPendingDeckTargetChoice(effect) {
+  const state = getState();
+  const choices = [];
+  effect.allowedPlayerIndexes.forEach((playerIndex) => {
+    const player = state.players[playerIndex];
+    if (!player) return;
+    effect.allowedDecks.forEach((deckType) => {
+      const cards = getDeckTopCards(playerIndex, deckType, effect.count);
+      choices.push(createElement('button', {
+        onclick: () => {
+          hideModal();
+          showPendingDeckResolution(effect, playerIndex, deckType);
+        }
+      }, [`${player.name} - ${deckLabel(deckType)} (${cards.length})`]));
+    });
+  });
+  showModal(effect.sourceName, createElement('div', { className: 'modal-choice' }, choices), []);
+}
+
+function showPendingDeckResolution(effect, targetPlayerIndex, deckType) {
+  const current = getPendingDeckEffect();
+  if (!current || current.id !== effect.id) return;
+  const state = getState();
+  const player = state.players[targetPlayerIndex];
+  const cards = getDeckTopCards(targetPlayerIndex, deckType, current.count);
+  const buttons = [];
+  const resolveChoice = (choice) => {
+    const resolved = resolvePendingDeckEffect({
+      targetPlayerIndex,
+      deckType,
+      ...choice
+    });
+    openPendingDeckEffectId = null;
+    noteRemoteLocalAction(resolved);
+    hideModal();
+    renderGameScreen();
+    if (resolved && current.mode === 'reveal_take') spawnArcadeEffect('draw', 'TAKE');
+  };
+
+  if (current.mode === 'peek_top') {
+    buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'top' }) }, ['Laisser au-dessus']));
+  } else if (current.mode === 'peek_order') {
+    buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'keep' }) }, ["Conserver l'ordre"]));
+    buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'reverse' }), disabled: cards.length < 2 }, ['Inverser les 2 cartes']));
+  } else if (current.mode === 'may_bottom') {
+    buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'keep' }) }, ['Laisser au-dessus']));
+    cards.forEach((card) => {
+      buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'bottom', cardId: card.id }) }, [`Mettre ${card.name} dessous`]));
+    });
+  } else if (current.mode === 'reveal_take') {
+    cards.forEach((card) => {
+      buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'take', cardId: card.id }) }, [`Prendre ${card.name}`]));
+    });
+    if (!cards.length) buttons.push(createElement('button', { onclick: () => resolveChoice({ action: 'empty' }) }, ['Continuer']));
+  }
+
+  const content = createElement('div', { className: 'draw-preview' }, [
+    createElement('p', { className: 'help', textContent: `${player.name} - ${deckLabel(deckType)}` }),
+    createElement('div', { className: 'draw-preview-cards' }, cards.length
+      ? cards.map((card) => renderPreviewCard(card))
+      : [emptyState('Pile vide')]),
+    createElement('div', { className: 'modal-choice' }, buttons)
+  ]);
+  showModal(current.sourceName, content, []);
+}
+
+function deckLabel(deckType) {
+  return deckType === 'functions' ? 'pioche Fonctions' : 'pioche Système';
 }
 
 function applyOverclock(functionId) {

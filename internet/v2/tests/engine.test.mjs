@@ -312,10 +312,12 @@ function assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh() {
 function assertPeekEffectsRevealDeckTopsWithoutDrawing() {
   const state = engine.newGame('Ada', 'Grace');
   const player = state.players[0];
+  const opponent = state.players[1];
   const topFunction = createCard('factorielle');
   const topSystem = createCard('swap');
   player.functionsDeck = [topFunction, createCard('sentinelle')];
   player.systemDeck = [topSystem, createCard('purge')];
+  opponent.systemDeck = [createCard('pollution'), createCard('ram')];
   player.hand = [createCard('sentinelle')];
   player.memFree = player.memTotal;
   assert.equal(engine.playCard(0, player.hand[0].id, { R: 0 }), true);
@@ -324,13 +326,14 @@ function assertPeekEffectsRevealDeckTopsWithoutDrawing() {
   player.updatedThisTurn = [];
 
   assert.equal(engine.updateFunction(func.id), true);
-  const consultation = state.log.find((entry) => entry.text.includes('carte du dessus d’une pioche'));
-  assert.ok(consultation, 'A peek effect writes the revealed cards to the log');
-  assert.match(consultation.text, new RegExp(topFunction.name));
-  assert.match(consultation.text, new RegExp(topSystem.name));
+  const pending = engine.getPendingDeckEffect();
+  assert.equal(pending.mode, 'peek_top');
+  assert.deepEqual(pending.allowedPlayerIndexes, [0, 1], 'Sentinelle can inspect either player deck');
+  assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 1, deckType: 'system', action: 'top' }), true);
   assert.equal(player.systemDeck[0].id, topSystem.id, 'Peeking does not draw the System card');
+  assert.equal(opponent.systemDeck.length, 2, 'Peeking an opponent deck does not draw either');
+  assert.equal(engine.getPendingDeckEffect(), null);
 }
-
 function assertDeckTopPreviewHelpers() {
   const state = engine.newGame('Ada', 'Grace');
   const player = state.players[0];
@@ -342,6 +345,50 @@ function assertDeckTopPreviewHelpers() {
   assert.equal(engine.moveTopDeckCardToBottom(0, 'system'), true);
   assert.deepEqual(player.systemDeck.map((card) => card.id), [second.id, first.id]);
   assert.equal(engine.getDeckTopCards(0, 'system', 1)[0].id, second.id);
+}
+
+function assertDeckChoiceEffectsMatchCardTexts() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  const first = createCard('swap');
+  const second = createCard('purge');
+  const third = createCard('ram');
+  player.functionsDeck = [createCard('factorielle')];
+  player.systemDeck = [first, second, third];
+  player.hand = [createCard('recherche')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 0 }), true);
+  player.active[0].frames = [3, 2, 1, 0];
+  player.active[0].reachedZero = true;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(player.active[0].id), true);
+  assert.equal(engine.getPendingDeckEffect().mode, 'reveal_take');
+  assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 0, deckType: 'system', cardId: second.id }), true);
+  assert.equal(player.hand.some((card) => card.id === second.id), true, 'Recherche takes the chosen revealed card');
+  assert.deepEqual(player.systemDeck.map((card) => card.id), [first.id, third.id], 'Recherche puts the other revealed cards under that pile');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  const top = createCard('collecte');
+  const bottomed = createCard('pollution');
+  const untouched = createCard('ram');
+  player.systemDeck = [top, bottomed, untouched];
+  player.hand = [createCard('tri_fusion')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 1 }), true);
+  const tri = player.active[0];
+  tri.frames = [1, 0];
+  tri.reachedZero = true;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(tri.id), true, 'Base case pops [0]');
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(tri.id), true, 'Unwind creates the Tri Fusion deck effect');
+  assert.equal(engine.getPendingDeckEffect().mode, 'may_bottom');
+  assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 0, deckType: 'system', action: 'bottom', cardId: bottomed.id }), true);
+  assert.equal(player.hand.some((card) => card.id === top.id), true, 'Tri Fusion base case draws before the unwind choice');
+  assert.deepEqual(player.systemDeck.map((card) => card.id), [untouched.id, bottomed.id], 'Tri Fusion can move one of the two seen cards under the pile');
 }
 
 function assertEndTurnInActionPhase() {
@@ -573,6 +620,7 @@ assertDrawRulesAndFunctionReplacement();
 assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh();
 assertPeekEffectsRevealDeckTopsWithoutDrawing();
 assertDeckTopPreviewHelpers();
+assertDeckChoiceEffectsMatchCardTexts();
 assertEndTurnInActionPhase();
 assertDemoScenarios();
 

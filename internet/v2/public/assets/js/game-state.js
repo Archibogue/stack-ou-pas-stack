@@ -47,6 +47,7 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     log: [],
     logSequence: 0,
     undoStack: [],
+    pendingDeckEffect: null,
     firstTurn: true,
     remoteCode: null,
     isRemote: false,
@@ -105,6 +106,7 @@ export function restoreState(data) {
   state.log = state.log || [];
   state.logSequence = state.logSequence || state.log.length || 0;
   state.undoStack = [];
+  state.pendingDeckEffect = state.pendingDeckEffect || null;
   state.players?.forEach((player) => {
     player.updatedThisTurn = player.updatedThisTurn || [];
     player.planifierUsed = Boolean(player.planifierUsed);

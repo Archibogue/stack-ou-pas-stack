@@ -296,6 +296,7 @@ export function canRebootCurrentPlayer() {
 
 export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId = null) {
   if (!gameState || gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect) return false;
   const player = gameState.players[playerIndex];
   if (!player || player.rebootedThisTurn) return false;
   const card = cardId ? player.hand.find((item) => item.id === cardId) : null;
@@ -308,10 +309,12 @@ export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId 
 
 export function canEndTurn() {
   if (gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect) return false;
   return gameState.phase === PHASES.ACTION;
 }
 
 export function drawForPlayer(deckType) {
+  if (gameState.pendingDeckEffect) return null;
   if (gameState.phase !== PHASES.DRAW || gameState.winner !== null) return null;
   if (deckType !== 'system') {
     logAction(gameState, 'La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction arrive automatiquement quand une fonction se termine, ou pendant un reboot.', 'warn');
@@ -345,14 +348,77 @@ export function getDeckTopCards(playerIndex, deckType, count = 1) {
   return deck.slice(0, count);
 }
 
-export function moveTopDeckCardToBottom(playerIndex, deckType) {
+export function moveTopDeckCardToBottom(playerIndex, deckType, cardId = null) {
   const player = gameState?.players?.[playerIndex];
   if (!player) return false;
   const deck = deckType === 'functions' ? player.functionsDeck : player.systemDeck;
   if (deck.length < 2) return false;
-  const [card] = deck.splice(0, 1);
+  const index = cardId ? deck.findIndex((card) => card.id === cardId) : 0;
+  if (index < 0) return false;
+  const [card] = deck.splice(index, 1);
   deck.push(card);
   logAction(gameState, `${player.name} place ${card.name} sous la pile ${deckType === 'functions' ? 'Fonctions' : 'Système'}.`, 'sys');
+  persistGameState();
+  return true;
+}
+
+export function getPendingDeckEffect() {
+  return gameState?.pendingDeckEffect || null;
+}
+
+export function resolvePendingDeckEffect(choice = {}) {
+  const effect = gameState?.pendingDeckEffect;
+  if (!effect || gameState.winner !== null) return false;
+  const targetPlayerIndex = Number(choice.targetPlayerIndex);
+  const deckType = choice.deckType;
+  if (!effect.allowedPlayerIndexes.includes(targetPlayerIndex) || !effect.allowedDecks.includes(deckType)) return false;
+  const target = gameState.players[targetPlayerIndex];
+  const deck = getDeck(target, deckType);
+  if (!target || !deck) return false;
+
+  createUndoPoint();
+  const visible = deck.slice(0, effect.count);
+  if (effect.mode === 'peek_top') {
+    logAction(gameState, `${effect.sourceName} : ${target.name} laisse ${formatDeckName(deckType)} au-dessus (${formatCardNames(visible)}).`, 'sys');
+  } else if (effect.mode === 'peek_order') {
+    if (choice.action === 'reverse' && visible.length >= 2) {
+      const first = deck[0];
+      deck[0] = deck[1];
+      deck[1] = first;
+      logAction(gameState, `${effect.sourceName} : ${target.name} inverse les 2 cartes du dessus de ${formatDeckName(deckType)}.`, 'sys');
+    } else {
+      logAction(gameState, `${effect.sourceName} : ${target.name} conserve l'ordre de ${formatDeckName(deckType)} (${formatCardNames(visible)}).`, 'sys');
+    }
+  } else if (effect.mode === 'may_bottom') {
+    if (choice.action === 'bottom' && choice.cardId) {
+      const index = visible.findIndex((card) => card.id === choice.cardId);
+      if (index >= 0) {
+        const [card] = deck.splice(index, 1);
+        deck.push(card);
+        logAction(gameState, `${effect.sourceName} : ${target.name} met ${card.name} sous ${formatDeckName(deckType)}.`, 'sys');
+      }
+    } else {
+      logAction(gameState, `${effect.sourceName} : ${target.name} laisse ${formatDeckName(deckType)} au-dessus (${formatCardNames(visible)}).`, 'sys');
+    }
+  } else if (effect.mode === 'reveal_take') {
+    if (visible.length === 0) {
+      logAction(gameState, `${effect.sourceName} : aucune carte à révéler dans ${formatDeckName(deckType)}.`, 'warn');
+    } else {
+      const selectedIndex = visible.findIndex((card) => card.id === choice.cardId);
+      const takeIndex = selectedIndex >= 0 ? selectedIndex : 0;
+      const revealed = deck.splice(0, visible.length);
+      const [taken] = revealed.splice(takeIndex, 1);
+      target.hand.push(taken);
+      deck.push(...revealed);
+      logAction(gameState, `${effect.sourceName} : ${target.name} révèle ${visible.length} carte(s) de ${formatDeckName(deckType)}, prend ${taken.name}, puis remet les autres sous la pile.`, 'good');
+    }
+  }
+
+  gameState.pendingDeckEffect = null;
+  if (effect.afterResolve?.drawReplacementFunction) {
+    const owner = gameState.players[effect.afterResolve.playerIndex];
+    if (owner) drawReplacementFunction(owner, { name: effect.afterResolve.functionName });
+  }
   persistGameState();
   return true;
 }
@@ -376,6 +442,7 @@ export function handleDeckExhaustion(player) {
 
 export function validateUpdatePhase() {
   if (gameState.phase !== PHASES.UPDATE) return false;
+  if (gameState.pendingDeckEffect) return false;
   const player = getCurrentPlayer();
   const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
   if (pending.length > 0) return false;
@@ -398,6 +465,7 @@ function advanceAfterUpdatePhase() {
 
 export function updateFunction(functionId, extra = false, options = {}) {
   if (gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect) return false;
   const player = getCurrentPlayer();
   const func = player.active.find((item) => item.id === functionId);
   if (!func || func.broken) return false;
@@ -466,20 +534,32 @@ function applyBaseEffect(player, func) {
     case 'glouton':
     case 'quicksort':
     case 'expansion':
-      logAction(gameState, `${func.name} — cas de base : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
+      logAction(gameState, `${func.name} - cas de base : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'compactage':
       releaseMemory(player, 1);
-      logAction(gameState, `${func.name} — cas de base : ${player.name} gagne 1 mémoire libre.`, 'good');
+      logAction(gameState, `${func.name} - cas de base : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — cas de base : révèle les 3 cartes du dessus d’une de ses pioches, prend ${formatDrawnCards(drawSystemCards(player, 1))}, puis remet les autres sous la pile.`, 'good');
+      createPendingDeckEffect(player, func.name, 'reveal_take', {
+        count: 3,
+        allowedPlayerIndexes: [player.index],
+        allowedDecks: ['functions', 'system']
+      });
       break;
     case 'sentinelle':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde la carte du dessus d’une pioche et la laisse au-dessus : ${formatPeekedCards(player, 1)}.`, 'sys');
+      createPendingDeckEffect(player, func.name, 'peek_top', {
+        count: 1,
+        allowedPlayerIndexes: gameState.players.map((item) => item.index),
+        allowedDecks: ['functions', 'system']
+      });
       break;
     case 'archiviste':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde les 2 cartes du dessus d’une pioche, puis les remet au-dessus dans l’ordre de son choix : ${formatPeekedCards(player, 2)}.`, 'sys');
+      createPendingDeckEffect(player, func.name, 'peek_order', {
+        count: 2,
+        allowedPlayerIndexes: gameState.players.map((item) => item.index),
+        allowedDecks: ['functions', 'system']
+      });
       break;
     default:
       break;
@@ -494,19 +574,23 @@ function applyUpEffect(player, func, value) {
     case 'expansion':
     case 'compactage':
       releaseMemory(player, 1);
-      logAction(gameState, `${func.name} — remontée [${value}] : ${player.name} gagne 1 mémoire libre.`, 'good');
+      logAction(gameState, `${func.name} - remontée [${value}] : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'glouton':
     case 'quicksort':
       const opponent = getOpponentPlayer();
       loseMemory(opponent, 1);
-      logAction(gameState, `${func.name} — remontée [${value}] : ${opponent.name} perd 1 mémoire libre.`, 'bad');
+      logAction(gameState, `${func.name} - remontée [${value}] : ${opponent.name} perd 1 mémoire libre.`, 'bad');
       break;
     case 'recherche':
       removeParasites(player, 1);
       break;
     case 'tri_fusion':
-      logAction(gameState, `${func.name} — remontée [${value}] : regarde les 2 cartes du dessus d’une de ses pioches ; peut mettre l’une d’elles sous la pile : ${formatPeekedCards(player, 2)}.`, 'sys');
+      createPendingDeckEffect(player, func.name, 'may_bottom', {
+        count: 2,
+        allowedPlayerIndexes: [player.index],
+        allowedDecks: ['functions', 'system']
+      });
       break;
     default:
       break;
@@ -524,7 +608,15 @@ function completeFunction(player, func) {
   applyTerminalEffect(player, func, bonus);
   func.memUsed = Math.min(func.memUsed, func.cost);
   releaseMemory(player, func.memUsed);
-  drawReplacementFunction(player, func);
+  if (gameState.pendingDeckEffect) {
+    gameState.pendingDeckEffect.afterResolve = {
+      drawReplacementFunction: true,
+      playerIndex: player.index,
+      functionName: func.name
+    };
+  } else {
+    drawReplacementFunction(player, func);
+  }
   player.completedThisTurn = true;
 }
 
@@ -559,7 +651,11 @@ function applyTerminalEffect(player, func, bonus) {
       if (bonus >= 2) logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — effet de terminaison : révèle B(R)+1 cartes du dessus d’une de ses pioches, prend ${formatDrawnCards(drawSystemCards(player, bonus + 1))}, puis remet les autres sous la pile.`, 'good');
+      createPendingDeckEffect(player, func.name, 'reveal_take', {
+        count: bonus + 1,
+        allowedPlayerIndexes: [player.index],
+        allowedDecks: ['functions', 'system']
+      });
       break;
     default:
       break;
@@ -604,6 +700,34 @@ function drawSystemCards(player, count) {
     drawn.push(card);
   }
   return drawn;
+}
+
+function getDeck(player, deckType) {
+  if (!player) return null;
+  return deckType === 'functions' ? player.functionsDeck : player.systemDeck;
+}
+
+function formatDeckName(deckType) {
+  return deckType === 'functions' ? 'la pile Fonctions' : 'la pile Système';
+}
+
+function formatCardNames(cards) {
+  if (!cards.length) return 'pile vide';
+  return cards.map((card) => card.name).join(', ');
+}
+
+function createPendingDeckEffect(player, sourceName, mode, options = {}) {
+  gameState.pendingDeckEffect = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    ownerIndex: player.index,
+    sourceName,
+    mode,
+    count: options.count ?? 1,
+    allowedPlayerIndexes: options.allowedPlayerIndexes ?? [player.index],
+    allowedDecks: options.allowedDecks ?? ['functions', 'system'],
+    afterResolve: options.afterResolve ?? null
+  };
+  logAction(gameState, `${sourceName} : effet de pioche en attente.`, 'sys');
 }
 
 function drawReplacementFunction(player, func) {
