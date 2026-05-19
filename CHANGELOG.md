@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — Préparation au partage bêta
+
+- Ajout d’une documentation de démarrage rapide.
+- Ajout d’une checklist de diffusion.
+- Ajout d’un guide de contribution.
+- Ajout d’une note de sécurité.
+- Ajout d’un script `npm test` minimal pour les tests moteur V2.
+- Clarification du statut bêta dans le README principal.
+- Compléments sur les cartes Système dans le deck d’initiation.
+- Vérification de cohérence entre règles physiques, deck Markdown et version web V2.
+
 ## 0.2.0 — Version internet V2
 
 - Ajout d’une version internet V2 hébergeable dans `internet/v2/public/`.

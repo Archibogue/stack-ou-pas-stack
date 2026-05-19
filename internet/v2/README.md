@@ -46,12 +46,16 @@ Ils vérifient les constantes de règles, la composition du deck par rapport au 
 
 ## Tester avec API PHP/MySQL
 
+L’API PHP/MySQL est optionnelle et pensée pour un usage pédagogique / prototype. La V2 reste jouable sans serveur de base de données grâce à la sauvegarde locale et à l’export/import JSON.
+
 1. Si la V2 est placée sous un site WordPress, laisser `api/config.php` absent : l’API cherche automatiquement `wp-config.php` dans les dossiers parents ou dans `DOCUMENT_ROOT` et réutilise les constantes `DB_NAME`, `DB_USER`, `DB_PASSWORD` et `DB_HOST`.
 2. Importer `internet/v2/public/api/schema.sql` dans la base WordPress. Les tables du jeu utilisent le préfixe `sops_`, actuellement `sops_games`.
 3. Déployer `internet/v2/public/` sur votre serveur PHP.
 4. Créer une partie serveur ou rejoindre une partie existante depuis l’écran d’accueil.
 
-Pour forcer une base dédiée hors WordPress, copier `internet/v2/public/api/config.example.php` en `config.php` et modifier les paramètres.
+Pour forcer une base dédiée hors WordPress, copier `internet/v2/public/api/config.example.php` en `config.php` et modifier les paramètres côté serveur.
+
+Ne versionnez jamais `internet/v2/public/api/config.php` : ce fichier contient les identifiants réels. `config.example.php` est seulement un modèle.
 
 ## Checklist manuelle
 

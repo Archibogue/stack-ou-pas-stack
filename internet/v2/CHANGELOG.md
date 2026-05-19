@@ -1,5 +1,11 @@
 # Changelog V2
 
+## 0.2.2 — Préparation au partage bêta
+
+- Clarification du caractère optionnel et pédagogique de l’API PHP/MySQL dans la documentation V2.
+- Rappel que `api/config.php` ne doit pas être versionné et que `config.example.php` sert de modèle.
+- Vérification de cohérence des constantes V2 avec les règles physiques d’initiation quadratique.
+
 ## 0.2.1 — Stabilisation moteur
 
 - Ajout de tests moteur sans framework dans `internet/v2/tests/`.

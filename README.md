@@ -2,7 +2,25 @@
 
 Jeu pédagogique sur la récursion, la mémoire, les piles d’appels, les fonctions cassées et l’overflow.
 
+**Statut** : bêta jouable / prototype pédagogique.
+
+**Public visé** : enseignants NSI/SNT, élèves et testeurs.
+
+**Version recommandée** : **Stack ou pas Stack — initiation quadratique**, en version physique ou web V2.
+
+Cette version est encore en test. Les retours de partie, corrections de règles et signalements de bugs sont bienvenus.
+
 Le dépôt est séparé en deux parties.
+
+## Démarrage rapide
+
+- [`QUICKSTART.md`](QUICKSTART.md) : imprimer, tester en local ou héberger la V2.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) : proposer un bug, une carte, une règle ou une amélioration web.
+- [`SECURITY.md`](SECURITY.md) : précautions pour l’API PHP/MySQL et les fichiers sensibles.
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) : vérifications avant diffusion.
+- [`internet/v2/README.md`](internet/v2/README.md) : détails de la version web V2.
+- [`physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md`](physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md) : règles physiques actives.
+- [`physique/initiation/cartes/CARD_SET_INITIATION_QUADRATIQUE.md`](physique/initiation/cartes/CARD_SET_INITIATION_QUADRATIQUE.md) : deck d’initiation.
 
 ## 1. Version physique
 
@@ -32,10 +50,10 @@ Dossier : [`internet/`](internet/)
 
 Cette partie contient une version jouable en navigateur.
 
-- V1 reste disponible dans `internet/index.html`.
-- V2 est disponible dans `internet/v2/public/index.html` : architecture séparée, moteur centralisé, sauvegarde locale et API PHP optionnelle.
+- V1/V1.1 reste disponible dans `internet/index.html` comme version historique jouable en fichier HTML autonome.
+- V2 est disponible dans `internet/v2/public/index.html` : version recommandée pour test web, avec architecture séparée, moteur centralisé, sauvegarde locale et API PHP/MySQL optionnelle.
 
-La V1.1 impose l’ordre obligatoire d’un tour :
+La règle d’ordre obligatoire d’un tour, utilisée par la version physique active et reprise par la V2, est :
 
 1. phase de mise à jour ;
 2. phase de pioche ;

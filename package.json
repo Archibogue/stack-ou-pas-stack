@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "node internet/v2/tests/engine.test.mjs"
+  }
+}
