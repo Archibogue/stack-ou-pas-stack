@@ -5,15 +5,15 @@ export const CARD_DEFINITIONS = {
   },
   tri_fusion: {
     key: 'tri_fusion', name: 'Tri Fusion Tempéré', type: 'Fonction', cost: 3, value: 2, maxR: 4, mode: 'jusqua', target: 'none',
-    description: 'Cas de base : pioche 1 carte. Remontée : réordonne virtuellement. Terminaison : retire B(R) parasites.'
+    description: 'Cas de base : pioche 1 carte. Remontée : regarde les 2 cartes du dessus d’une de tes pioches. Tu peux mettre l’une d’elles sous la pile. Terminaison : retire B(R) parasites.'
   },
   recherche: {
     key: 'recherche', name: 'Recherche Dichotomique', type: 'Fonction', cost: 2, value: 2, maxR: 3, mode: 'fixe', target: 'none',
-    description: 'Cas de base : révèle puis prend 1 carte. Remontée : retire 1 parasite. Terminaison : pioche B(R)+1.'
+    description: 'Cas de base : révèle les 3 cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile. Remontée : retire 1 parasite. Terminaison : révèle B(R)+1 cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile.'
   },
   sentinelle: {
     key: 'sentinelle', name: 'Routine Sentinelle', type: 'Fonction', cost: 2, value: 1, maxR: 2, mode: 'jusqua', target: 'none',
-    description: 'Cas de base : regarde le dessus d’une pile. Remontée : gagne 1 mémoire. Terminaison : pioche B(R).'
+    description: 'Cas de base : regarde la carte du dessus d’une pioche. Tu dois la laisser au-dessus. Remontée : gagne 1 mémoire. Terminaison : pioche B(R).'
   },
   glouton: {
     key: 'glouton', name: 'Greffon Glouton', type: 'Fonction', cost: 2, value: 1, maxR: 3, mode: 'jusqua', target: 'none',
@@ -21,7 +21,7 @@ export const CARD_DEFINITIONS = {
   },
   archiviste: {
     key: 'archiviste', name: 'Archiviste du Cache', type: 'Fonction', cost: 2, value: 1, maxR: 3, mode: 'jusqua', target: 'none',
-    description: 'Cas de base : regarde 2 cartes. Remontée : gagne 1 mémoire. Terminaison : pioche B(R), puis défausse 1.'
+    description: 'Cas de base : regarde les 2 cartes du dessus d’une pioche, puis remets-les au-dessus dans l’ordre de ton choix. Remontée : gagne 1 mémoire. Terminaison : pioche B(R), puis défausse 1.'
   },
   quicksort: {
     key: 'quicksort', name: 'Quicksort Agressif', type: 'Fonction', cost: 3, value: 2, maxR: 4, mode: 'jusqua', target: 'none',

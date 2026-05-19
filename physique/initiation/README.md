@@ -13,6 +13,16 @@ Ce dossier contient la version physique active du jeu. C’est le point d’entr
 - [`impression/stack_ou_pas_stack_initiation_quadratique_J2_recto_verso.pdf`](impression/stack_ou_pas_stack_initiation_quadratique_J2_recto_verso.pdf) : deck joueur 2.
 - [`impression/stack_ou_pas_stack_regles_initiation_quadratique.pdf`](impression/stack_ou_pas_stack_regles_initiation_quadratique.pdf) : règles en PDF.
 
+## Génération des planches
+
+Les planches de cartes sont générées depuis les définitions de la version web :
+
+```bash
+node physique/initiation/scripts/generate-print-assets.mjs
+```
+
+Le script régénère les HTML sources, les PDF J1/J2/global et le ZIP du kit d’impression web.
+
 ## Paramètres rapides
 
 - Mémoire : 11 / 11.

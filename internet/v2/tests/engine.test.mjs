@@ -324,11 +324,24 @@ function assertPeekEffectsRevealDeckTopsWithoutDrawing() {
   player.updatedThisTurn = [];
 
   assert.equal(engine.updateFunction(func.id), true);
-  const consultation = state.log.find((entry) => entry.text.includes('dessus des piles'));
+  const consultation = state.log.find((entry) => entry.text.includes('carte du dessus d’une pioche'));
   assert.ok(consultation, 'A peek effect writes the revealed cards to the log');
   assert.match(consultation.text, new RegExp(topFunction.name));
   assert.match(consultation.text, new RegExp(topSystem.name));
   assert.equal(player.systemDeck[0].id, topSystem.id, 'Peeking does not draw the System card');
+}
+
+function assertDeckTopPreviewHelpers() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  const first = createCard('swap');
+  const second = createCard('purge');
+  player.systemDeck = [first, second];
+
+  assert.deepEqual(engine.getDeckTopCards(0, 'system', 2).map((card) => card.id), [first.id, second.id]);
+  assert.equal(engine.moveTopDeckCardToBottom(0, 'system'), true);
+  assert.deepEqual(player.systemDeck.map((card) => card.id), [second.id, first.id]);
+  assert.equal(engine.getDeckTopCards(0, 'system', 1)[0].id, second.id);
 }
 
 function assertEndTurnInActionPhase() {
@@ -414,7 +427,7 @@ function assertDemoScenarios() {
     overflow_avoidable: 6,
     profitable_reboot: 5,
     opponent_interrupt: 6,
-    forced_reboot: 7
+    forced_reboot: 4
   };
 
   scenarios.forEach((scenario) => {
@@ -537,8 +550,9 @@ function assertDemoScenarios() {
   assert.equal(cyan.functionsDeck.length, 0);
   assert.equal(cyan.systemDeck.length, 0);
   assert.equal(cyan.active.length, 1);
+  assert.equal(engine.getPlayerUsedMemory(cyan), cyan.memTotal, 'Before exhaustion, used memory exactly matches total memory');
   assert.equal(engine.drawForPlayer('system'), null);
-  assert.equal(cyan.memTotal, 3);
+  assert.equal(cyan.memTotal, 5);
   assert.equal(cyan.active.length, 0, 'Exhaustion can trigger a forced reboot');
   assert.equal(cyan.hand.length, 5);
 }
@@ -558,6 +572,7 @@ assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();
 assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh();
 assertPeekEffectsRevealDeckTopsWithoutDrawing();
+assertDeckTopPreviewHelpers();
 assertEndTurnInActionPhase();
 assertDemoScenarios();
 

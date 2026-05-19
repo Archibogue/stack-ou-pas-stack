@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Stack ou pas Stack - J2</title>
+  <style>
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #10140f; color: #f7f2e9; font-family: Arial, Helvetica, sans-serif; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sheet {
+      width: 194mm;
+      height: 281mm;
+      padding: 0;
+      break-after: page;
+      page-break-after: always;
+      background: #10140f;
+      position: relative;
+    }
+    .sheet-title {
+      height: 8mm;
+      color: #c9d4c7;
+      font-size: 8pt;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 63mm);
+      grid-auto-rows: 88mm;
+      gap: 2mm 2mm;
+    }
+    .card {
+      width: 63mm;
+      height: 88mm;
+      border: .55mm solid color-mix(in srgb, var(--accent), #f7f2e9 36%);
+      border-radius: 4mm;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.02)),
+        #1b201b;
+      color: #f7f2e9;
+      padding: 4mm;
+      display: flex;
+      flex-direction: column;
+      gap: 2.2mm;
+      box-shadow: inset 0 0 0 .25mm rgba(255,255,255,.14);
+      position: relative;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 1.8mm;
+      border: .25mm dashed rgba(255,255,255,.12);
+      border-radius: 3mm;
+      pointer-events: none;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2mm;
+      color: #f7f2e9;
+      font-size: 7.6pt;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: relative;
+      z-index: 1;
+    }
+    .card-header span,
+    .card-header strong {
+      border: .3mm solid color-mix(in srgb, var(--accent), #ffffff 32%);
+      border-radius: 99px;
+      padding: 1.1mm 1.7mm;
+      background: color-mix(in srgb, var(--accent), #1b201b 76%);
+      white-space: nowrap;
+    }
+    h2 {
+      margin: 0;
+      font-size: 15pt;
+      line-height: 1.05;
+      color: #ffffff;
+      position: relative;
+      z-index: 1;
+    }
+    .rule {
+      border: .35mm solid color-mix(in srgb, var(--accent), #ffffff 22%);
+      border-radius: 2.2mm;
+      padding: 1.7mm;
+      background: color-mix(in srgb, var(--accent), #ffffff 82%);
+      color: #20221e;
+      font-size: 9.4pt;
+      font-weight: 700;
+      line-height: 1.14;
+      position: relative;
+      z-index: 1;
+    }
+    p {
+      margin: 0;
+      color: #e7e2d8;
+      font-size: 9.25pt;
+      line-height: 1.19;
+      position: relative;
+      z-index: 1;
+      overflow-wrap: anywhere;
+    }
+    footer {
+      margin-top: auto;
+      color: rgba(247,242,233,.68);
+      font-size: 6.8pt;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: relative;
+      z-index: 1;
+    }
+    .command { --type:#7ee787; }
+    .interrupt { --type:#ff7b72; }
+    .hardware { --type:#ffd166; }
+    .function { --type:#4ecdc4; }
+    .card.command, .card.interrupt, .card.hardware, .card.function {
+      border-color: color-mix(in srgb, var(--type), #ffffff 18%);
+    }
+    .back {
+      padding: 5mm;
+      align-items: stretch;
+      justify-content: stretch;
+      background:
+        radial-gradient(circle at 18% 16%, color-mix(in srgb, var(--accent), transparent 55%), transparent 24%),
+        radial-gradient(circle at 82% 82%, color-mix(in srgb, var(--type), transparent 58%), transparent 28%),
+        linear-gradient(135deg, #121812, #252a22);
+    }
+    .back-frame {
+      flex: 1;
+      border: .5mm solid rgba(255,255,255,.24);
+      border-radius: 3mm;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 6mm 4mm;
+      background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 1.5mm, transparent 1.5mm 3mm);
+      position: relative;
+      z-index: 1;
+    }
+    .back-mark {
+      font-size: 24pt;
+      font-weight: 900;
+      letter-spacing: .08em;
+      color: #ffffff;
+      text-shadow: 0 0 8px color-mix(in srgb, var(--accent), transparent 30%);
+    }
+    .back-sub {
+      margin-top: -16mm;
+      font-size: 9pt;
+      letter-spacing: .16em;
+      color: #d9eadf;
+    }
+    .back-type {
+      align-self: end;
+      font-size: 10pt;
+      font-weight: 800;
+      color: #f7f2e9;
+    }
+    .back-player {
+      font-size: 8pt;
+      color: rgba(247,242,233,.7);
+    }
+  </style>
+</head>
+<body>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - RECTO 1 - J2</div>
+      <div class="grid">
+        
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Fonction Factorielle</h2>
+      <div class="rule">Empiler jusqu&#39;a 4 - valeur 2</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : gagne 1 mémoire.<br>Terminaison : gagne B(R) mémoire.</p>
+      <footer>J2 - Fonction Factorielle </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Fonction Factorielle</h2>
+      <div class="rule">Empiler jusqu&#39;a 4 - valeur 2</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : gagne 1 mémoire.<br>Terminaison : gagne B(R) mémoire.</p>
+      <footer>J2 - Fonction Factorielle 2</footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Tri Fusion Tempéré</h2>
+      <div class="rule">Empiler jusqu&#39;a 4 - valeur 2</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : regarde les 2 cartes du dessus d’une de tes pioches.<br>Tu peux mettre l’une d’elles sous la pile.<br>Terminaison : retire B(R) parasites.</p>
+      <footer>J2 - Tri Fusion Tempéré </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Recherche Dichotomique</h2>
+      <div class="rule">Empiler 3 - valeur 2</div>
+      <p>Cas de base : révèle les 3 cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile.<br>Remontée : retire 1 parasite.<br>Terminaison : révèle B(R)+1 cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile.</p>
+      <footer>J2 - Recherche Dichotomique </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Routine Sentinelle</h2>
+      <div class="rule">Empiler jusqu&#39;a 2 - valeur 1</div>
+      <p>Cas de base : regarde la carte du dessus d’une pioche.<br>Tu dois la laisser au-dessus.<br>Remontée : gagne 1 mémoire.<br>Terminaison : pioche B(R).</p>
+      <footer>J2 - Routine Sentinelle </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Routine Sentinelle</h2>
+      <div class="rule">Empiler jusqu&#39;a 2 - valeur 1</div>
+      <p>Cas de base : regarde la carte du dessus d’une pioche.<br>Tu dois la laisser au-dessus.<br>Remontée : gagne 1 mémoire.<br>Terminaison : pioche B(R).</p>
+      <footer>J2 - Routine Sentinelle 2</footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Greffon Glouton</h2>
+      <div class="rule">Empiler jusqu&#39;a 3 - valeur 1</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : l’adversaire perd 1 mémoire.<br>Terminaison : ajoute B(R) parasites.</p>
+      <footer>J2 - Greffon Glouton </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Greffon Glouton</h2>
+      <div class="rule">Empiler jusqu&#39;a 3 - valeur 1</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : l’adversaire perd 1 mémoire.<br>Terminaison : ajoute B(R) parasites.</p>
+      <footer>J2 - Greffon Glouton 2</footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Archiviste du Cache</h2>
+      <div class="rule">Empiler jusqu&#39;a 3 - valeur 1</div>
+      <p>Cas de base : regarde les 2 cartes du dessus d’une pioche, puis remets-les au-dessus dans l’ordre de ton choix.<br>Remontée : gagne 1 mémoire.<br>Terminaison : pioche B(R), puis défausse 1.</p>
+      <footer>J2 - Archiviste du Cache </footer>
+    </article>
+      </div>
+    </section>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - VERSO 1 - J2</div>
+      <div class="grid">
+        
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+      </div>
+    </section>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - RECTO 2 - J2</div>
+      <div class="grid">
+        
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Quicksort Agressif</h2>
+      <div class="rule">Empiler jusqu&#39;a 4 - valeur 2</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : l’adversaire perd 1 mémoire.<br>Terminaison : il perd B(R) mémoire.</p>
+      <footer>J2 - Quicksort Agressif </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Expansion Quadratique</h2>
+      <div class="rule">Empiler jusqu&#39;a 5 - valeur 2</div>
+      <p>Cas de base : pioche 1 carte.<br>Remontée : gagne 1 mémoire.<br>Terminaison : gagne B(R) mémoire.</p>
+      <footer>J2 - Expansion Quadratique </footer>
+    </article>
+
+    <article class="card function" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Fonction</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Compactage Mémoire</h2>
+      <div class="rule">Empiler jusqu&#39;a 3 - valeur 2</div>
+      <p>Cas de base : gagne 1 mémoire.<br>Remontée : gagne 1 mémoire.<br>Terminaison : nettoie une fonction cassée.</p>
+      <footer>J2 - Compactage Mémoire </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Hotfix</h2>
+      <div class="rule">Cout 3</div>
+      <p>Répare une fonction cassée avec son cadre initial seulement.</p>
+      <footer>J2 - Hotfix </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Collecte Incrémentale</h2>
+      <div class="rule">Cout 2</div>
+      <p>Nettoie une fonction cassée puis pioche 1 carte.</p>
+      <footer>J2 - Collecte Incrémentale </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Collecte Incrémentale</h2>
+      <div class="rule">Cout 2</div>
+      <p>Nettoie une fonction cassée puis pioche 1 carte.</p>
+      <footer>J2 - Collecte Incrémentale 2</footer>
+    </article>
+
+    <article class="card interrupt" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Interrupt</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Stack Spike</h2>
+      <div class="rule">Cout 3</div>
+      <p>Ajoute 2 parasites sur une fonction à 4 ou 5 cadres.</p>
+      <footer>J2 - Stack Spike </footer>
+    </article>
+
+    <article class="card interrupt" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Interrupt</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Injection de Boucle</h2>
+      <div class="rule">Cout 2</div>
+      <p>Ajoute 1 parasite.<br>Si la cible ne paie pas 1 mémoire, elle casse.</p>
+      <footer>J2 - Injection de Boucle </footer>
+    </article>
+
+    <article class="card hardware" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Hardware</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Overclocking</h2>
+      <div class="rule">Cout 2</div>
+      <p>Une fois par tour, met à jour une fonction en plus ; -1 mémoire si elle ne termine pas.</p>
+      <footer>J2 - Overclocking </footer>
+    </article>
+      </div>
+    </section>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - VERSO 2 - J2</div>
+      <div class="grid">
+        
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back function" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Fonctions</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back interrupt" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back interrupt" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back hardware" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+      </div>
+    </section>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - RECTO 3 - J2</div>
+      <div class="grid">
+        
+    <article class="card interrupt" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Interrupt</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Débogueur pas à pas</h2>
+      <div class="rule">Cout 2</div>
+      <p>Dépile le sommet d’une fonction cassée sans effet.</p>
+      <footer>J2 - Débogueur pas à pas </footer>
+    </article>
+
+    <article class="card hardware" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Hardware</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Planificateur local</h2>
+      <div class="rule">Cout 2</div>
+      <p>Une fois par tour, empiler coûte 0 mémoire.</p>
+      <footer>J2 - Planificateur local </footer>
+    </article>
+
+    <article class="card hardware" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Hardware</span>
+        <strong>Cout 3</strong>
+      </header>
+      <h2>Barrette RAM</h2>
+      <div class="rule">Cout 3</div>
+      <p>+4 mémoire totale et +4 mémoire libre.</p>
+      <footer>J2 - Barrette RAM </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Pollution de Cache</h2>
+      <div class="rule">Cout 2</div>
+      <p>Ajoute 2 parasites à une fonction adverse.</p>
+      <footer>J2 - Pollution de Cache </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Pollution de Cache</h2>
+      <div class="rule">Cout 2</div>
+      <p>Ajoute 2 parasites à une fonction adverse.</p>
+      <footer>J2 - Pollution de Cache 2</footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Purge Contrôlée</h2>
+      <div class="rule">Cout 2</div>
+      <p>Retire jusqu’à 2 parasites d’une fonction, sinon pioche 1 carte.</p>
+      <footer>J2 - Purge Contrôlée </footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 2</strong>
+      </header>
+      <h2>Purge Contrôlée</h2>
+      <div class="rule">Cout 2</div>
+      <p>Retire jusqu’à 2 parasites d’une fonction, sinon pioche 1 carte.</p>
+      <footer>J2 - Purge Contrôlée 2</footer>
+    </article>
+
+    <article class="card command" style="--accent:#ffd166">
+      <header class="card-header">
+        <span>Commande</span>
+        <strong>Cout 1</strong>
+      </header>
+      <h2>Swap Brutal</h2>
+      <div class="rule">Cout 1</div>
+      <p>+3 mémoire temporaire, pénalité si aucune fonction ne termine ce tour.</p>
+      <footer>J2 - Swap Brutal </footer>
+    </article>
+      </div>
+    </section>
+
+    <section class="sheet" style="--accent:#ffd166">
+      <div class="sheet-title">Joueur Orange - VERSO 3 - J2</div>
+      <div class="grid">
+        
+    <article class="card back interrupt" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back hardware" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back hardware" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+
+    <article class="card back command" style="--accent:#ffd166">
+      <div class="back-frame">
+        <div class="back-mark">STACK</div>
+        <div class="back-sub">OU PAS STACK</div>
+        <div class="back-type">Pioche Systeme</div>
+        <div class="back-player">Joueur Orange</div>
+      </div>
+    </article>
+      </div>
+    </section>
+</body>
+</html>

@@ -1210,10 +1210,12 @@ p {
 }
 
 .score-pill {
+  position: relative;
   min-width: 72px;
   border-color: rgba(233, 196, 106, 0.45);
   background: rgba(233, 196, 106, 0.12);
   font-weight: 900;
+  overflow: visible;
 }
 
 .hardware-chip {
@@ -1315,6 +1317,34 @@ p {
   font-size: 1.22rem;
   font-weight: 900;
   line-height: 1;
+}
+
+.compact-stat {
+  position: relative;
+  overflow: visible;
+}
+
+.counter-delta {
+  position: absolute;
+  z-index: 5;
+  right: 8px;
+  top: -10px;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.74);
+  color: var(--green);
+  padding: 2px 5px;
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 8px currentColor;
+  transform: translateY(0);
+  animation: counterDeltaPop 0.95s steps(6, end) both;
+  pointer-events: none;
+}
+
+.counter-delta.negative {
+  color: var(--red);
 }
 
 .play-area {
@@ -1811,6 +1841,42 @@ select {
   justify-content: flex-start;
 }
 
+.demo-guide {
+  display: grid;
+  gap: 12px;
+}
+
+.demo-guide section {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.demo-guide p {
+  margin: 6px 0 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.draw-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.draw-preview-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.draw-preview-card {
+  width: 190px;
+  min-height: 244px;
+  animation: none;
+}
+
 .hidden {
   display: none !important;
 }
@@ -2138,6 +2204,25 @@ select {
   80%,
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes counterDeltaPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  72% {
+    opacity: 1;
+    transform: translateY(-14px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.92);
   }
 }
 

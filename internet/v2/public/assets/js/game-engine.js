@@ -145,16 +145,16 @@ export function getFunctionEffectSummary(func) {
     },
     tri_fusion: {
       base: 'pioche 1 carte',
-      up: 'réordonne virtuellement les cartes du dessus',
+      up: 'regarde les 2 cartes du dessus d’une de tes pioches ; tu peux mettre l’une d’elles sous la pile',
       terminal: `retire jusqu’à B(${func.R})=${bonus} parasite(s)`
     },
     recherche: {
-      base: 'révèle puis prend 1 carte',
+      base: 'révèle les 3 cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile',
       up: 'retire 1 cadre parasite',
-      terminal: `pioche B(${func.R})+1=${bonus + 1} carte(s)`
+      terminal: `révèle B(${func.R})+1=${bonus + 1} cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile`
     },
     sentinelle: {
-      base: 'regarde le dessus d’une pile',
+      base: 'regarde la carte du dessus d’une pioche et la laisse au-dessus',
       up: 'gagne 1 mémoire libre',
       terminal: `pioche B(${func.R})=${bonus} carte(s)`
     },
@@ -164,7 +164,7 @@ export function getFunctionEffectSummary(func) {
       terminal: `ajoute B(${func.R})=${bonus} parasite(s) chez l’adversaire`
     },
     archiviste: {
-      base: 'regarde 2 cartes',
+      base: 'regarde les 2 cartes du dessus d’une pioche, puis les remet au-dessus dans l’ordre de son choix',
       up: 'gagne 1 mémoire libre',
       terminal: `pioche B(${func.R})=${bonus} carte(s), puis défausse 1 carte`
     },
@@ -338,6 +338,25 @@ export function drawForPlayer(deckType) {
   return card;
 }
 
+export function getDeckTopCards(playerIndex, deckType, count = 1) {
+  const player = gameState?.players?.[playerIndex];
+  if (!player) return [];
+  const deck = deckType === 'functions' ? player.functionsDeck : player.systemDeck;
+  return deck.slice(0, count);
+}
+
+export function moveTopDeckCardToBottom(playerIndex, deckType) {
+  const player = gameState?.players?.[playerIndex];
+  if (!player) return false;
+  const deck = deckType === 'functions' ? player.functionsDeck : player.systemDeck;
+  if (deck.length < 2) return false;
+  const [card] = deck.splice(0, 1);
+  deck.push(card);
+  logAction(gameState, `${player.name} place ${card.name} sous la pile ${deckType === 'functions' ? 'Fonctions' : 'Système'}.`, 'sys');
+  persistGameState();
+  return true;
+}
+
 export function handleDeckExhaustion(player) {
   if (player.functionsDeck.length === 0 && player.systemDeck.length === 0) {
     player.memTotal -= 1;
@@ -454,13 +473,13 @@ function applyBaseEffect(player, func) {
       logAction(gameState, `${func.name} — cas de base : ${player.name} gagne 1 mémoire libre.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — cas de base : révèle puis prend ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
+      logAction(gameState, `${func.name} — cas de base : révèle les 3 cartes du dessus d’une de ses pioches, prend ${formatDrawnCards(drawSystemCards(player, 1))}, puis remet les autres sous la pile.`, 'good');
       break;
     case 'sentinelle':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde le dessus des piles : ${formatPeekedCards(player, 1)}.`, 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde la carte du dessus d’une pioche et la laisse au-dessus : ${formatPeekedCards(player, 1)}.`, 'sys');
       break;
     case 'archiviste':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde 2 cartes : ${formatPeekedCards(player, 2)}.`, 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde les 2 cartes du dessus d’une pioche, puis les remet au-dessus dans l’ordre de son choix : ${formatPeekedCards(player, 2)}.`, 'sys');
       break;
     default:
       break;
@@ -487,7 +506,7 @@ function applyUpEffect(player, func, value) {
       removeParasites(player, 1);
       break;
     case 'tri_fusion':
-      logAction(gameState, `${func.name} — remontée [${value}] : cartes du dessus à réordonner virtuellement : ${formatPeekedCards(player, 2)}.`, 'sys');
+      logAction(gameState, `${func.name} — remontée [${value}] : regarde les 2 cartes du dessus d’une de ses pioches ; peut mettre l’une d’elles sous la pile : ${formatPeekedCards(player, 2)}.`, 'sys');
       break;
     default:
       break;
@@ -540,7 +559,7 @@ function applyTerminalEffect(player, func, bonus) {
       if (bonus >= 2) logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'recherche':
-      logAction(gameState, `${func.name} — effet de terminaison : ${formatDrawnCards(drawSystemCards(player, bonus + 1))}.`, 'good');
+      logAction(gameState, `${func.name} — effet de terminaison : révèle B(R)+1 cartes du dessus d’une de ses pioches, prend ${formatDrawnCards(drawSystemCards(player, bonus + 1))}, puis remet les autres sous la pile.`, 'good');
       break;
     default:
       break;
@@ -1363,7 +1382,7 @@ export function loadDemoScenario(name) {
       break;
 
     case 'forced_reboot': {
-      game.turn = 7;
+      game.turn = 4;
       const exhaustedDiscard = [
         'factorielle', 'factorielle', 'tri_fusion', 'recherche', 'sentinelle', 'sentinelle',
         'glouton', 'glouton', 'archiviste', 'expansion', 'compactage',
@@ -1378,7 +1397,7 @@ export function loadDemoScenario(name) {
         discard: exhaustedDiscard,
         completed: demoCompleted(['sentinelle', 'factorielle']),
         score: 8,
-        memTotal: 4,
+        memTotal: 6,
         memFree: 0
       });
       configureDemoPlayer(orange, {
@@ -1394,9 +1413,10 @@ export function loadDemoScenario(name) {
       game.phase = PHASES.DRAW;
       addDemoHistory(game, [
         'Démonstration 10 — Reboot forcé.',
-        'Tours précédents — Joueur Cyan a beaucoup pioché et ses deux piles sont maintenant vides.',
-        'Tour 7 — Cyan doit piocher pendant la phase de pioche, mais il ne reste aucune carte dans ses piles.',
-        'Tour 7 — L’épuisement retire 1 mémoire totale. La mémoire utilisée par Quicksort devient alors supérieure à la mémoire totale.',
+        'Tours 1 à 3 — Joueur Cyan a beaucoup accéléré ses pioches pour rester devant au score.',
+        'Tour 3 — Joueur Orange a mis la pression sur la mémoire de Cyan, qui a dû vider ses dernières ressources pour garder Quicksort en jeu.',
+        'Début du tour 4 — Cyan doit piocher pendant la phase de pioche, mais ses deux piles sont maintenant vides.',
+        'Début du tour 4 — Cyan utilise exactement 6 mémoire sur 6 mémoire totale. L’épuisement retire 1 mémoire totale : sa mémoire utilisée devient supérieure à sa mémoire totale.',
         'Position d’analyse — La règle impose immédiatement un reboot forcé : Cyan ne choisit pas le moment, il subit la remise à zéro.',
         'Question pour la classe — Quelle différence voyez-vous entre un reboot volontaire rentable et un reboot forcé déclenché trop tard ?'
       ]);

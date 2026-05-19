@@ -1,5 +1,5 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
@@ -10,6 +10,8 @@ let remotePollInFlight = false;
 let lastRemoteSignature = '';
 let remotePollPausedUntil = 0;
 let lastSeenLogOrder = 0;
+let lastCounterSnapshot = null;
+let counterDeltas = new Map();
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -29,6 +31,69 @@ const DEMO_SCENARIOS = [
   ['opponent_interrupt', '9. Interrupt lisible'],
   ['forced_reboot', '10. Reboot forcé']
 ];
+
+const DEMO_GUIDES = {
+  depth_choice: {
+    title: 'Choix de profondeur',
+    goal: 'Comparer une petite profondeur rapide avec une profondeur plus risquée mais mieux récompensée.',
+    observe: 'Cyan a toute sa mémoire libre et plusieurs Fonctions en main. Le bonus B(R)=R² rend les grands R très attractifs.',
+    action: 'Lance une Fonction et choisis volontairement une profondeur. Regarde le coût en temps et en mémoire.'
+  },
+  base_not_end: {
+    title: 'Cas de base ≠ fin',
+    goal: 'Montrer qu’atteindre [0] déclenche le cas de base, mais ne termine pas la fonction.',
+    observe: 'Factorielle contient [2], [1], [0] et va commencer à dépiler.',
+    action: 'Mets Factorielle à jour et observe que [0] disparaît, mais que la fonction reste active.'
+  },
+  strategic_memory: {
+    title: 'Choix mémoire',
+    goal: 'Trouver l’ordre de mise à jour qui évite toute casse malgré 0 mémoire libre.',
+    observe: 'Compactage veut empiler [0], mais Factorielle peut d’abord dépiler [0] et libérer 1 mémoire.',
+    action: 'Mets Factorielle à jour avant Compactage, puis compare avec l’ordre inverse.'
+  },
+  repair_or_clean: {
+    title: 'Nettoyer ou réparer',
+    goal: 'Comparer les réponses possibles à une fonction cassée qui occupe beaucoup de mémoire.',
+    observe: 'Quicksort est cassée, ne progresse plus, mais réserve encore sa mémoire.',
+    action: 'Essaie Hotfix, Collecte ou Débogueur et compare mémoire récupérée, tempo et potentiel de score.'
+  },
+  ram: {
+    title: 'Barrette RAM',
+    goal: 'Lire la différence entre mémoire libre, mémoire totale et mémoire utilisée.',
+    observe: 'Cyan a peu de mémoire libre et deux fonctions actives. Barrette RAM coûte cher mais augmente la capacité.',
+    action: 'Installe Barrette RAM et regarde les compteurs mémoire avant de finir le tour.'
+  },
+  stack_spike_break: {
+    title: 'Stack Spike',
+    goal: 'Voir pourquoi une pile à 5 cadres est vulnérable.',
+    observe: 'Tri Fusion adverse a exactement 5 cadres. Stack Spike ajoute 2 parasites.',
+    action: 'Joue Stack Spike sur Tri Fusion et observe la casse au moment où le 7e cadre serait créé.'
+  },
+  overflow_avoidable: {
+    title: 'Overflow évitable',
+    goal: 'Comprendre qu’un parasite retiré au bon moment peut empêcher une casse.',
+    observe: 'Tri Fusion a 5 cadres dont un parasite. Sans action, Stack Spike est dangereux.',
+    action: 'Joue Purge Contrôlée avant que l’adversaire puisse exploiter Stack Spike.'
+  },
+  profitable_reboot: {
+    title: 'Reboot rentable',
+    goal: 'Montrer qu’un reboot volontaire peut être un choix stratégique, pas seulement une punition.',
+    observe: 'Cyan commence son tour avec peu de mémoire libre, une main faible et une fonction cassée encombrante.',
+    action: 'Fais un reboot volontaire avant toute autre action et observe la mémoire et la nouvelle main.'
+  },
+  opponent_interrupt: {
+    title: 'Interrupt lisible',
+    goal: 'Apprendre à jouer une Interrupt pendant le tour adverse quand la condition est visible.',
+    observe: 'C’est le tour d’Orange, mais Cyan a Stack Spike et Tri Fusion adverse a 5 cadres.',
+    action: 'Joue Stack Spike depuis la main de Cyan pendant le tour adverse.'
+  },
+  forced_reboot: {
+    title: 'Reboot forcé',
+    goal: 'Illustrer la règle mémoire utilisée > mémoire totale après épuisement de pioche.',
+    observe: 'Cyan utilise exactement toute sa mémoire totale et ses deux piles sont vides.',
+    action: 'Clique sur Piocher Système : l’épuisement baisse la mémoire totale et force le reboot.'
+  }
+};
 
 const ARCADE_SPRITES = {
   ship: [
@@ -316,6 +381,7 @@ function promptNewGame() {
   stopRemotePolling();
   const name1 = prompt('Nom du joueur 1 ?', 'Joueur Cyan')?.trim() || 'Joueur Cyan';
   const name2 = prompt('Nom du joueur 2 ?', 'Joueur Orange')?.trim() || 'Joueur Orange';
+  resetCounterAnimations();
   newGame(name1, name2);
   renderGameScreen();
 }
@@ -326,6 +392,7 @@ function loadLocalGame() {
     alert('Aucune sauvegarde locale trouvée.');
     return;
   }
+  resetCounterAnimations();
   loadGame(saved);
   renderGameScreen();
   startRemotePollingIfNeeded();
@@ -341,6 +408,7 @@ function importGameJson() {
   if (!json) return;
   const success = importGame(json);
   if (success) {
+    resetCounterAnimations();
     renderGameScreen();
     startRemotePollingIfNeeded();
   } else {
@@ -354,6 +422,7 @@ async function createServerGame() {
   const state = newGame(name1, name2);
   const response = await createRemoteGame(state);
   if (response?.code) {
+    resetCounterAnimations();
     setRemoteCode(response.code);
     saveRemoteSeat(response.code, 0);
     persistGameState();
@@ -370,6 +439,7 @@ async function joinServerGame() {
   if (!code) return;
   const response = await joinRemoteGame(code);
   if (response?.state) {
+    resetCounterAnimations();
     loadGame(response.state);
     setRemoteCode(code);
     saveRemoteSeat(code, 1);
@@ -383,9 +453,33 @@ async function joinServerGame() {
 
 function loadDemo(name) {
   stopRemotePolling();
+  resetCounterAnimations();
   loadDemoScenario(name);
   renderGameScreen();
   spawnArcadeEffect('deploy', 'DEMO');
+  showDemoGuide(name);
+}
+
+function showDemoGuide(name) {
+  const guide = DEMO_GUIDES[name];
+  if (!guide) return;
+  const content = createElement('div', { className: 'demo-guide' }, [
+    createElement('section', {}, [
+      createElement('span', { className: 'eyebrow', textContent: 'Objectif' }),
+      createElement('p', { textContent: guide.goal })
+    ]),
+    createElement('section', {}, [
+      createElement('span', { className: 'eyebrow', textContent: 'À observer' }),
+      createElement('p', { textContent: guide.observe })
+    ]),
+    createElement('section', {}, [
+      createElement('span', { className: 'eyebrow', textContent: 'Premier geste' }),
+      createElement('p', { textContent: guide.action })
+    ])
+  ]);
+  showModal(`Démonstration — ${guide.title}`, content, [
+    { label: 'Commencer', onClick: () => {} }
+  ]);
 }
 
 function undoAction() {
@@ -397,6 +491,7 @@ function undoAction() {
 function renderGameScreen() {
   const state = getState();
   if (!state) return;
+  prepareCounterDeltas(state);
   if (isRemoteState(state)) lastRemoteSignature = remoteSignature(state);
   const remoteMode = isRemoteState(state);
   app.innerHTML = '';
@@ -440,6 +535,8 @@ function renderGameScreen() {
 
   app.append(header, board);
   if (!remoteMode) app.append(renderHelpPanel());
+  lastCounterSnapshot = buildCounterSnapshot(state);
+  counterDeltas = new Map();
 }
 
 function renderRemoteBoard(state) {
@@ -461,13 +558,13 @@ function renderRemoteOpponentSummary(player) {
           createElement('span', { className: 'eyebrow', textContent: 'Adversaire' }),
           createElement('h2', { className: 'player-title', textContent: player.name })
         ]),
-        createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
+        scorePill(player)
       ]),
       createElement('div', { className: 'remote-public-counters' }, [
-        stat('ML', player.memFree),
-        stat('MT', player.memTotal),
-        stat('Main', player.hand.length),
-        stat('Cassées', brokenCount)
+        stat('ML', player.memFree, counterKey(player, 'memFree')),
+        stat('MT', player.memTotal, counterKey(player, 'memTotal')),
+        stat('Main', player.hand.length, counterKey(player, 'hand')),
+        stat('Cassées', brokenCount, counterKey(player, 'broken'))
       ]),
       createElement('div', { className: 'remote-public-zone' }, [
         createElement('div', { className: 'remote-zone-head' }, [
@@ -496,16 +593,16 @@ function renderRemoteLocalConsole(player) {
         createElement('div', { className: 'remote-identity' }, [
           createElement('div', { className: 'player-name' }, [
             createElement('span', { className: 'eyebrow', textContent: label }),
-            createElement('h2', { className: 'player-title', textContent: player.name })
-          ]),
-          createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
+          createElement('h2', { className: 'player-title', textContent: player.name })
+        ]),
+          scorePill(player)
         ]),
         createElement('div', { className: 'remote-public-counters' }, [
-          stat('ML', player.memFree),
-          stat('MT', player.memTotal),
-          stat('Utilisée', getPlayerUsedMemory(player)),
-          stat('Main', player.hand.length),
-          stat('Cassées', brokenCount)
+          stat('ML', player.memFree, counterKey(player, 'memFree')),
+          stat('MT', player.memTotal, counterKey(player, 'memTotal')),
+          stat('Utilisée', getPlayerUsedMemory(player), counterKey(player, 'used')),
+          stat('Main', player.hand.length, counterKey(player, 'hand')),
+          stat('Cassées', brokenCount, counterKey(player, 'broken'))
         ]),
         createElement('div', { className: 'remote-hardware-row' }, player.hardware.length
           ? player.hardware.map((hw) => renderHardwareChip(hw))
@@ -632,15 +729,15 @@ function renderPlayerPanel(player, options = {}) {
           createElement('h2', { className: 'player-title', textContent: player.name }),
           createElement('div', { className: 'chip', textContent: seatChip })
         ]),
-        createElement('div', { className: 'score-pill', textContent: `${player.score} pts` })
+        scorePill(player)
       ]),
       memoryMeter(player),
       createElement('div', { className: 'stats' }, [
-        stat('Libre', player.memFree),
-        stat('Totale', player.memTotal),
-        stat('Utilisée', getPlayerUsedMemory(player)),
-        stat('Main', player.hand.length),
-        stat('Cassées', brokenCount)
+        stat('Libre', player.memFree, counterKey(player, 'memFree')),
+        stat('Totale', player.memTotal, counterKey(player, 'memTotal')),
+        stat('Utilisée', getPlayerUsedMemory(player), counterKey(player, 'used')),
+        stat('Main', player.hand.length, counterKey(player, 'hand')),
+        stat('Cassées', brokenCount, counterKey(player, 'broken'))
       ]),
       createElement('section', { className: 'play-area' }, [
         createElement('h3', { className: 'area-title', textContent: 'Piles' }),
@@ -681,11 +778,64 @@ function renderPlayerPanel(player, options = {}) {
   return panel;
 }
 
-function stat(label, value) {
+function scorePill(player) {
+  const delta = counterDeltas.get(counterKey(player, 'score')) || 0;
+  return createElement('div', { className: 'score-pill counter-pop-host' }, [
+    `${player.score} pts`,
+    renderCounterDelta(delta)
+  ]);
+}
+
+function stat(label, value, key = null) {
+  const delta = key ? counterDeltas.get(key) || 0 : 0;
   return createElement('div', { className: 'stat compact-stat' }, [
     createElement('span', { className: 'label', textContent: label }),
-    createElement('span', { className: 'value', textContent: value })
+    createElement('span', { className: 'value', textContent: value }),
+    renderCounterDelta(delta)
   ]);
+}
+
+function renderCounterDelta(delta) {
+  if (!delta) return null;
+  const sign = delta > 0 ? '+' : '';
+  return createElement('span', {
+    className: `counter-delta ${delta > 0 ? 'positive' : 'negative'}`,
+    textContent: `${sign}${delta}`
+  });
+}
+
+function counterKey(player, metric) {
+  return `p${player.index}:${metric}`;
+}
+
+function buildCounterSnapshot(state) {
+  const snapshot = new Map();
+  state.players.forEach((player) => {
+    snapshot.set(counterKey(player, 'score'), player.score);
+    snapshot.set(counterKey(player, 'memFree'), player.memFree);
+    snapshot.set(counterKey(player, 'memTotal'), player.memTotal);
+    snapshot.set(counterKey(player, 'used'), getPlayerUsedMemory(player));
+    snapshot.set(counterKey(player, 'hand'), player.hand.length);
+    snapshot.set(counterKey(player, 'broken'), player.active.filter((fn) => fn.broken).length);
+  });
+  return snapshot;
+}
+
+function prepareCounterDeltas(state) {
+  const next = buildCounterSnapshot(state);
+  counterDeltas = new Map();
+  if (!lastCounterSnapshot) return;
+  next.forEach((value, key) => {
+    const previous = lastCounterSnapshot.get(key);
+    if (typeof previous === 'number' && value !== previous) {
+      counterDeltas.set(key, value - previous);
+    }
+  });
+}
+
+function resetCounterAnimations() {
+  lastCounterSnapshot = null;
+  counterDeltas = new Map();
 }
 
 function memoryMeter(player) {
@@ -930,10 +1080,7 @@ function renderCenterPanel(state) {
 
   buttons.push(createElement('button', {
     onclick: () => {
-      const card = drawForPlayer('system');
-      noteRemoteLocalAction(true);
-      renderGameScreen();
-      if (card) spawnArcadeEffect('draw', 'DRAW');
+      previewPhaseDraw();
     },
     disabled: !canUseTurnControls || state.phase !== PHASES.DRAW || state.winner !== null
   }, ['Piocher Système']));
@@ -1056,10 +1203,82 @@ function drawPileButton(playerIndex, deckType) {
   const current = getState().currentPlayerIndex;
   if (playerIndex !== current) return;
   if (!canControlPlayer(playerIndex)) return;
-  const card = drawForPlayer(deckType);
-  noteRemoteLocalAction(true);
-  renderGameScreen();
-  if (card) spawnArcadeEffect('draw', 'DRAW');
+  if (deckType === 'system') {
+    previewPhaseDraw();
+  }
+}
+
+function previewPhaseDraw() {
+  const state = getState();
+  const player = state.players[state.currentPlayerIndex];
+  if (!canControlCurrentTurn(state) || state.phase !== PHASES.DRAW || state.winner !== null) return;
+  const top = getDeckTopCards(player.index, 'system', 1)[0];
+  if (!top) {
+    const card = drawForPlayer('system');
+    noteRemoteLocalAction(true);
+    renderGameScreen();
+    if (card) spawnArcadeEffect('draw', 'DRAW');
+    return;
+  }
+  showCardDecisionModal({
+    title: 'Pioche Système',
+    player,
+    deckType: 'system',
+    cards: [top],
+    allowTake: true,
+    allowBottom: false,
+    allowTop: false,
+    takeLabel: 'Mettre dans la main',
+    topLabel: 'Remettre au-dessus'
+  });
+}
+
+function showCardDecisionModal({ title, player, deckType, cards, allowTake, allowBottom, allowTop = true, takeLabel = 'Mettre dans la main', topLabel = 'Remettre au-dessus' }) {
+  const content = createElement('div', { className: 'draw-preview' }, [
+    createElement('div', { className: 'draw-preview-cards' }, cards.length
+      ? cards.map((card) => renderPreviewCard(card))
+      : [emptyState('Pile vide')])
+  ]);
+  const actions = [];
+  if (allowTop) {
+    actions.push({
+      label: topLabel,
+      onClick: () => {}
+    });
+  }
+  if (allowBottom && cards.length) {
+    actions.push({
+      label: 'Mettre au-dessous',
+      onClick: () => {
+        const changed = moveTopDeckCardToBottom(player.index, deckType);
+        noteRemoteLocalAction(changed);
+        renderGameScreen();
+      }
+    });
+  }
+  if (allowTake && cards.length) {
+    actions.push({
+      label: takeLabel,
+      onClick: () => {
+        const card = drawForPlayer(deckType);
+        noteRemoteLocalAction(true);
+        renderGameScreen();
+        if (card) spawnArcadeEffect('draw', 'DRAW');
+      }
+    });
+  }
+  showModal(title, content, actions);
+}
+
+function renderPreviewCard(card) {
+  return createElement('article', { className: `card ${cardTypeClass(card.type)} preview-card draw-preview-card` }, [
+    createElement('div', { className: 'card-top' }, [
+      createElement('span', { className: `type-badge ${cardTypeClass(card.type)}`, textContent: card.type }),
+      createElement('span', { className: 'cost-badge', textContent: `Coût ${card.cost ?? '-'}` })
+    ]),
+    createElement('h3', { className: 'title', textContent: card.name }),
+    createElement('div', { className: 'desc', textContent: card.description || 'Carte.' })
+  ]);
 }
 
 function applyUpdate(functionId) {
@@ -1068,6 +1287,8 @@ function applyUpdate(functionId) {
   if (!beforeOwner || !canControlPlayer(beforeOwner.index)) return;
   const before = beforeOwner?.active.find((fn) => fn.id === functionId);
   const beforeFrames = before ? before.frames.length : 0;
+  const beforeTop = before?.frames[before.frames.length - 1];
+  const beforeCardKey = before?.cardKey;
   const wasUnwinding = Boolean(before?.reachedZero);
   const updated = updateFunction(functionId);
   noteRemoteLocalAction(updated);
@@ -1086,6 +1307,31 @@ function applyUpdate(functionId) {
   } else {
     spawnArcadeEffect('unwind', 'POP');
   }
+  maybeShowPeekDecision(beforeOwner, beforeCardKey, beforeTop, wasUnwinding);
+}
+
+function maybeShowPeekDecision(player, cardKey, poppedFrame, wasUnwinding) {
+  if (!wasUnwinding) return;
+  if (poppedFrame === 0 && cardKey === 'sentinelle') {
+    showPeekDecision(player, 1, false, 'Routine Sentinelle');
+  } else if (poppedFrame === 0 && cardKey === 'archiviste') {
+    showPeekDecision(player, 2, false, 'Archiviste du Cache');
+  } else if (poppedFrame !== 0 && cardKey === 'tri_fusion') {
+    showPeekDecision(player, 2, true, 'Tri Fusion Tempéré');
+  }
+}
+
+function showPeekDecision(player, count, allowBottom, sourceName) {
+  const cards = getDeckTopCards(player.index, 'system', count);
+  showCardDecisionModal({
+    title: `${sourceName} — dessus Système`,
+    player,
+    deckType: 'system',
+    cards,
+    allowTake: false,
+    allowBottom,
+    topLabel: 'Laisser au-dessus'
+  });
 }
 
 function applyOverclock(functionId) {
