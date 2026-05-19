@@ -294,6 +294,7 @@ function showHomeScreen() {
       createElement('li', { textContent: 'Les Interrupts se jouent aussi pendant le tour adverse, dès qu’une cible légale existe.' }),
       createElement('li', { textContent: 'Les cadres parasites comptent dans la pile et n’offrent aucun effet.' }),
       createElement('li', { textContent: 'Une fonction casse si elle doit recevoir un 7e cadre.' }),
+      createElement('li', { textContent: 'Si un joueur doit piocher avec ses deux piles vides, il perd 1 mémoire totale au lieu de piocher.' }),
       createElement('li', { textContent: 'Les Commandes/Interrupts sont payées et libèrent leur mémoire après résolution.' }),
       createElement('li', { textContent: 'Le reboot volontaire se fait au début du tour, avant toute mise à jour, pioche ou carte jouée.' })
     ])
@@ -958,7 +959,8 @@ function renderHelpPanel() {
       createElement('li', { textContent: 'Pas de pioche libre dans la pile Fonctions : remplacement automatique à la terminaison, ou reboot de début de tour.' }),
       createElement('li', { textContent: 'Les fonctions cassées restent en jeu et occupent de la mémoire.' }),
       createElement('li', { textContent: 'Nettoyer libère la mémoire et défausse la fonction.' }),
-      createElement('li', { textContent: 'Réparer remet la fonction en état selon le texte de la carte.' })
+      createElement('li', { textContent: 'Réparer remet la fonction en état selon le texte de la carte ; par défaut elle revient avec son cadre initial seulement.' }),
+      createElement('li', { textContent: 'Si les deux piles sont vides au moment de piocher, le joueur perd 1 mémoire totale ; si sa mémoire utilisée dépasse ensuite sa mémoire totale, il subit un reboot forcé.' })
     ])
   ]);
 }

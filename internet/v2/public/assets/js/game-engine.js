@@ -347,6 +347,8 @@ export function handleDeckExhaustion(player) {
       gameState.winner = getOpponentPlayer().index;
       gameState.phase = PHASES.GAME_OVER;
       logAction(gameState, `${player.name} tombe à 0 mémoire totale. ${getOpponentPlayer().name} gagne.`, 'bad');
+    } else if (getPlayerUsedMemory(player) > player.memTotal) {
+      rebootPlayer(player, true);
     }
     return true;
   }

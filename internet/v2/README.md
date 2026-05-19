@@ -61,8 +61,10 @@ Pour forcer une base dédiée hors WordPress, copier `internet/v2/public/api/con
 - Lancer une fonction et atteindre [0].
 - Dépiler le cas de base puis terminer une fonction.
 - Vérifier qu’une Fonction terminée déclenche une pioche automatique de remplacement.
+- Vider les deux piles puis vérifier l’épuisement de pioche : -1 mémoire totale, défaite immédiate à 0, ou reboot forcé si la mémoire utilisée dépasse la mémoire totale.
 - Déclencher un overflow sur le 7e cadre.
 - Nettoyer une fonction cassée.
+- Réparer une fonction cassée et vérifier qu’elle revient avec son cadre initial seulement.
 - Sauvegarder et recharger en local.
 - Exporter et importer une partie JSON.
 - Si l’API est disponible : créer une partie serveur, enregistrer et charger une partie distante.

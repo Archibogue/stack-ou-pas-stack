@@ -257,6 +257,37 @@ function assertDrawRulesAndFunctionReplacement() {
   assert.equal(player.systemDeck.length, systemsBeforeCompletion - 1, 'Factorielle base case draws from the System deck');
 }
 
+function assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  state.phase = rules.PHASES.DRAW;
+  player.functionsDeck = [];
+  player.systemDeck = [];
+  player.hand = [];
+  player.memTotal = 4;
+  player.memFree = 0;
+  player.active = [{
+    id: 'broken-factorielle',
+    cardKey: 'factorielle',
+    key: 'factorielle',
+    name: 'Fonction Factorielle',
+    cost: 3,
+    value: 2,
+    R: 2,
+    frames: [2, 1, 0],
+    nextValue: -1,
+    reachedZero: true,
+    broken: true,
+    memUsed: 5
+  }];
+
+  assert.equal(engine.drawForPlayer('system'), null);
+  assert.equal(player.memTotal, 3, 'Exhaustion reduces total memory by 1');
+  assert.equal(player.active.length, 0, 'Used memory above total triggers an immediate forced reboot');
+  assert.equal(state.phase, rules.PHASES.ACTION);
+  assert.ok(state.log.some((entry) => entry.text.includes('reboot forcé')));
+}
+
 function assertPeekEffectsRevealDeckTopsWithoutDrawing() {
   const state = engine.newGame('Ada', 'Grace');
   const player = state.players[0];
@@ -437,6 +468,7 @@ assertPlanifierAndHotfix();
 assertRebootStopsActions();
 assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();
+assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh();
 assertPeekEffectsRevealDeckTopsWithoutDrawing();
 assertEndTurnInActionPhase();
 assertDemoScenarios();

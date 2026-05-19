@@ -125,6 +125,14 @@
         <li>Les Commandes et Interrupts demandent de pouvoir payer leur coût, puis libèrent cette mémoire après résolution.</li>
         <li>Les Hardware restent en jeu et continuent d’occuper leur coût mémoire.</li>
       </ul>
+      <p>La mémoire utilisée correspond à la mémoire réservée par les Fonctions actives ou cassées, plus la mémoire occupée par les Hardware actifs.</p>
+      <h3>Épuisement de pioche</h3>
+      <p>Si un joueur doit piocher une carte et que ses deux piles sont vides, il ne pioche pas. À la place, il perd 1 mémoire totale.</p>
+      <ul>
+        <li>Si sa mémoire libre devient supérieure à sa nouvelle mémoire totale, elle est réduite à cette nouvelle valeur.</li>
+        <li>Si sa mémoire utilisée dépasse sa mémoire totale actuelle, il effectue immédiatement un reboot forcé.</li>
+        <li>Si sa mémoire totale tombe à 0, il perd immédiatement la partie.</li>
+      </ul>
     </section>
 
     <section id="fonctions" class="panel panel-body rules-section">
@@ -154,6 +162,7 @@
         <li>Il ne modifie jamais <code>R</code>.</li>
       </ul>
       <p>Une fonction casse si elle devrait recevoir un 7e cadre. Une fonction cassée reste en jeu, continue d’occuper sa mémoire et ne rapporte aucun point tant qu’elle n’est pas nettoyée ou réparée.</p>
+      <p>Nettoyer une fonction cassée consiste à la défausser pour libérer sa mémoire. Réparer une fonction cassée consiste à la remettre en état selon le texte de la carte ; par défaut, elle revient avec son cadre initial seulement.</p>
       <p><strong>Stack Spike</strong> cible une fonction contenant exactement 4 ou 5 cadres. Elle ajoute 2 cadres parasites. Si cela devait créer un 7e cadre, la fonction casse immédiatement.</p>
     </section>
 
@@ -180,6 +189,7 @@
       <h2>9. Reboot</h2>
       <p>Au début de son tour, avant toute autre action du tour, un joueur peut effectuer un reboot volontaire. S’il a déjà mis à jour une fonction, pioché ou joué une carte ce tour-ci, il ne peut plus rebooter volontairement.</p>
       <p>Le reboot volontaire remplace toutes ses autres actions du tour.</p>
+      <p>Un reboot forcé suit les mêmes étapes, mais il est effectué immédiatement quand une règle l’impose.</p>
       <ol>
         <li>Il défausse ses fonctions actives, intactes ou cassées.</li>
         <li>Les piles associées sont retirées sans produire d’effet.</li>
