@@ -462,6 +462,8 @@ function assertDemoScenarios() {
     'overflow_avoidable',
     'profitable_reboot',
     'opponent_interrupt',
+    'deck_peek_order',
+    'recherche_pick',
     'forced_reboot'
   ];
   const expectedTurns = {
@@ -474,6 +476,8 @@ function assertDemoScenarios() {
     overflow_avoidable: 6,
     profitable_reboot: 5,
     opponent_interrupt: 6,
+    deck_peek_order: 4,
+    recherche_pick: 5,
     forced_reboot: 4
   };
 
@@ -591,6 +595,25 @@ function assertDemoScenarios() {
   assert.equal(engine.canPlayCard(0, spike.id), true, 'Cyan can interrupt during Orange turn');
   assert.equal(engine.playCard(0, spike.id, { functionId: orangePlayer.active[0].id }), true);
   assert.equal(orangePlayer.active[0].broken, true);
+
+  state = engine.loadDemoScenario('deck_peek_order');
+  cyan = state.players[0];
+  orangePlayer = state.players[1];
+  assert.deepEqual(orangePlayer.systemDeck.slice(0, 2).map((card) => card.key), ['stack_spike', 'pollution']);
+  assert.equal(engine.updateFunction(cyan.active[0].id), true);
+  assert.equal(engine.getPendingDeckEffect().mode, 'peek_order');
+  assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 1, deckType: 'system', action: 'reverse' }), true);
+  assert.deepEqual(orangePlayer.systemDeck.slice(0, 2).map((card) => card.key), ['pollution', 'stack_spike']);
+
+  state = engine.loadDemoScenario('recherche_pick');
+  cyan = state.players[0];
+  assert.deepEqual(cyan.systemDeck.slice(0, 3).map((card) => card.key), ['ram', 'purge', 'overclock']);
+  assert.equal(engine.updateFunction(cyan.active[0].id), true);
+  assert.equal(engine.getPendingDeckEffect().mode, 'reveal_take');
+  const revealedPurge = cyan.systemDeck.find((card) => card.key === 'purge');
+  assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 0, deckType: 'system', cardId: revealedPurge.id }), true);
+  assert.equal(cyan.hand.some((card) => card.key === 'purge'), true);
+  assert.deepEqual(cyan.systemDeck.slice(-2).map((card) => card.key), ['ram', 'overclock']);
 
   state = engine.loadDemoScenario('forced_reboot');
   cyan = state.players[0];

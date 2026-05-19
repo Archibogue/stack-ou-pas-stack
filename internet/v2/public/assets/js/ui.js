@@ -30,7 +30,9 @@ const DEMO_SCENARIOS = [
   ['overflow_avoidable', '7. Overflow évitable'],
   ['profitable_reboot', '8. Reboot rentable'],
   ['opponent_interrupt', '9. Interrupt lisible'],
-  ['forced_reboot', '10. Reboot forcé']
+  ['deck_peek_order', '10. Lire une pioche'],
+  ['recherche_pick', '11. Recherche choisie'],
+  ['forced_reboot', '12. Reboot forcé']
 ];
 
 const DEMO_GUIDES = {
@@ -87,6 +89,18 @@ const DEMO_GUIDES = {
     goal: 'Apprendre à jouer une Interrupt pendant le tour adverse quand la condition est visible.',
     observe: 'C’est le tour d’Orange, mais Cyan a Stack Spike et Tri Fusion adverse a 5 cadres.',
     action: 'Joue Stack Spike depuis la main de Cyan pendant le tour adverse.'
+  },
+  deck_peek_order: {
+    title: 'Lire une pioche',
+    goal: 'Montrer qu’un effet de vision peut cibler une pioche précise, y compris adverse.',
+    observe: 'Archiviste va dépiler [0]. Orange a une pioche Système préparée avec deux menaces visibles.',
+    action: 'Mets Archiviste à jour, choisis la pioche Système d’Orange, puis décide si tu inverses les deux cartes.'
+  },
+  recherche_pick: {
+    title: 'Recherche choisie',
+    goal: 'Comprendre la différence entre regarder et révéler : ici une carte est choisie et les autres partent sous la pile.',
+    observe: 'Recherche Dichotomique va révéler 3 cartes de l’une de tes pioches.',
+    action: 'Mets Recherche à jour, choisis ta pioche Système, prends la carte la plus utile, puis observe l’ordre restant.'
   },
   forced_reboot: {
     title: 'Reboot forcé',

@@ -1505,6 +1505,74 @@ export function loadDemoScenario(name) {
       ]);
       break;
 
+    case 'deck_peek_order':
+      game.turn = 4;
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('archiviste', 1, { frames: [1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['purge', 'ram', 'factorielle', 'sentinelle'],
+        discard: ['collecte', 'factorielle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 7
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('glouton', 1, { frames: [1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['hotfix', 'injection', 'tri_fusion'],
+        discard: ['purge', 'collecte'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
+        memFree: 9
+      });
+      putDeckKeysOnTop(orange, 'system', ['stack_spike', 'pollution']);
+      game.phase = PHASES.UPDATE;
+      addDemoHistory(game, [
+        'Démonstration 11 — Lire une pioche adverse.',
+        'Tour 2 — Joueur Cyan a lancé Archiviste du Cache pour surveiller le tempo adverse.',
+        'Tour 3 — Joueur Orange a déjà montré qu’il joue agressif avec des Interrupts.',
+        'Tour 4 — Archiviste contient [1], [0] : la prochaine mise à jour dépile [0] et déclenche son cas de base.',
+        'Position d’analyse — Cyan peut regarder deux cartes du dessus d’une pioche, y compris chez Orange, puis les laisser ou les inverser.',
+        'Question pour la classe — Si vous voyez Stack Spike et Pollution de Cache au-dessus de la pioche adverse, dans quel ordre voulez-vous les laisser ?'
+      ]);
+      break;
+
+    case 'recherche_pick':
+      game.turn = 5;
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('recherche', 3, { frames: [3, 2, 1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['collecte', 'purge', 'sentinelle'],
+        discard: ['swap', 'hotfix'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
+        memFree: 5
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('quicksort', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['pollution', 'stack_spike', 'injection', 'ram'],
+        discard: ['sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 8
+      });
+      putDeckKeysOnTop(cyan, 'system', ['ram', 'purge', 'overclock']);
+      game.phase = PHASES.UPDATE;
+      addDemoHistory(game, [
+        'Démonstration 12 — Révéler, choisir, remettre dessous.',
+        'Tour 2 — Joueur Cyan a lancé Recherche Dichotomique avec R=3 pour préparer un choix de pioche précis.',
+        'Tours 3-4 — Recherche a atteint [0] et attend maintenant son cas de base.',
+        'Tour 5 — Cyan cherche une réponse : de la mémoire avec Barrette RAM, du contrôle avec Purge, ou du tempo avec Overclocking.',
+        'Position d’analyse — Recherche révèle les 3 cartes du dessus d’une de tes pioches, en prend 1 en main, puis remet les autres sous cette pile.',
+        'Question pour la classe — Quelle carte prendre maintenant, et pourquoi les deux autres vont-elles sous la pile plutôt qu’au-dessus ?'
+      ]);
+      break;
+
     case 'forced_reboot': {
       game.turn = 4;
       const exhaustedDiscard = [
@@ -1629,6 +1697,18 @@ function buildRemainingDemoDecks(usedKeys) {
   });
 
   return { functions, system };
+}
+
+function putDeckKeysOnTop(player, deckType, keys) {
+  const deck = deckType === 'functions' ? player.functionsDeck : player.systemDeck;
+  const topCards = [];
+  keys.forEach((key) => {
+    const index = deck.findIndex((card) => card.key === key);
+    if (index === -1) return;
+    const [card] = deck.splice(index, 1);
+    topCards.push(card);
+  });
+  deck.unshift(...topCards);
 }
 
 function demoFunction(key, R, overrides = {}) {
