@@ -567,7 +567,8 @@ function renderRemoteBoard(state) {
 
 function renderRemoteOpponentSummary(player) {
   const brokenCount = player.active.filter((fn) => fn.broken).length;
-  return createElement('section', { className: 'panel remote-opponent-summary' }, [
+  const tone = player.index === 0 ? 'cyan' : 'orange';
+  return createElement('section', { className: `panel remote-opponent-summary player-${tone}` }, [
     createElement('div', { className: 'panel-body' }, [
       createElement('div', { className: 'remote-identity' }, [
         createElement('div', { className: 'player-name' }, [
@@ -603,7 +604,8 @@ function renderRemoteLocalConsole(player) {
   const brokenCount = player.active.filter((fn) => fn.broken).length;
   const seat = getRemoteSeat(state);
   const label = seat === null ? 'Spectateur' : 'Votre camp';
-  return createElement('section', { className: 'panel remote-local-console' }, [
+  const tone = player.index === 0 ? 'cyan' : 'orange';
+  return createElement('section', { className: `panel remote-local-console player-${tone}` }, [
     createElement('div', { className: 'panel-body' }, [
       createElement('div', { className: 'remote-local-status' }, [
         createElement('div', { className: 'remote-identity' }, [

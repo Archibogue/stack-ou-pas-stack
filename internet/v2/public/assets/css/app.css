@@ -389,6 +389,75 @@ p {
   min-width: 0;
 }
 
+.player-cyan {
+  --player-color: var(--cyan);
+  --player-rgb: 78, 205, 196;
+  --player-soft: rgba(78, 205, 196, 0.14);
+  --player-line: rgba(78, 205, 196, 0.58);
+}
+
+.player-orange {
+  --player-color: var(--orange);
+  --player-rgb: 244, 162, 89;
+  --player-soft: rgba(244, 162, 89, 0.15);
+  --player-line: rgba(244, 162, 89, 0.6);
+}
+
+.player-panel,
+.remote-opponent-summary,
+.remote-local-console {
+  border-color: color-mix(in srgb, var(--player-color, var(--line-strong)), transparent 34%);
+  background:
+    linear-gradient(90deg, rgba(var(--player-rgb, 255, 255, 255), 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(var(--player-rgb, 255, 255, 255), 0.07), transparent 34%),
+    rgba(29, 33, 29, 0.94);
+}
+
+.player-panel::before,
+.remote-opponent-summary::before,
+.remote-local-console::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: linear-gradient(180deg, var(--player-color), rgba(var(--player-rgb), 0.16));
+  box-shadow: 0 0 18px rgba(var(--player-rgb), 0.34);
+  pointer-events: none;
+}
+
+.remote-opponent-summary::before {
+  inset: 0 0 0 auto;
+}
+
+.player-panel .panel-body,
+.remote-opponent-summary .panel-body,
+.remote-local-console .panel-body {
+  position: relative;
+  z-index: 1;
+}
+
+.player-cyan .player-title,
+.player-cyan .remote-identity .eyebrow,
+.player-cyan .player-name .chip {
+  color: #8ff8f2;
+}
+
+.player-orange .player-title,
+.player-orange .remote-identity .eyebrow,
+.player-orange .player-name .chip {
+  color: #ffc17f;
+}
+
+.player-cyan .score-pill {
+  border-color: rgba(78, 205, 196, 0.58);
+  background: rgba(78, 205, 196, 0.13);
+}
+
+.player-orange .score-pill {
+  border-color: rgba(244, 162, 89, 0.62);
+  background: rgba(244, 162, 89, 0.15);
+}
+
 @media (min-width: 900px) {
   .hearthstone-board .remote-player .panel-body {
     display: grid;
