@@ -1146,15 +1146,15 @@ export function loadDemoScenario(name) {
       game.turn = 4;
       configureDemoPlayer(cyan, {
         active: [
-          demoFunction('factorielle', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 }),
-          demoFunction('compactage', 1, { frames: [1], reachedZero: false, nextValue: 0 })
+          demoFunction('compactage', 1, { frames: [1], reachedZero: false, nextValue: 0 }),
+          demoFunction('factorielle', 2, { frames: [2, 1, 0], reachedZero: true, nextValue: -1 })
         ],
         hand: ['purge', 'collecte', 'ram'],
         discard: ['pollution', 'sentinelle'],
         completed: demoCompleted(['sentinelle']),
         score: 2,
         memTotal: 11,
-        memFree: 1
+        memFree: 0
       });
       configureDemoPlayer(orange, {
         hand: ['stack_spike', 'injection', 'glouton', 'hotfix'],
@@ -1162,13 +1162,13 @@ export function loadDemoScenario(name) {
       });
       game.phase = PHASES.UPDATE;
       addDemoHistory(game, [
-        'Démonstration 3 — Choix stratégique avec 1 mémoire libre.',
+        'Démonstration 3 — Choix stratégique sans mémoire libre.',
         'Tour 1 — Joueur Cyan a déjà terminé Routine Sentinelle : 2 points, mais la partie est encore loin d’être gagnée.',
         'Tour 2 — Joueur Cyan a lancé Fonction Factorielle avec R=2.',
-        'Tour 3 — Fonction Factorielle a empilé [1], puis Joueur Cyan a lancé Compactage Mémoire avec R=1.',
-        'Tour 3 — Joueur Orange a réduit la mémoire libre de Cyan. Il reste 1 mémoire libre, mais les deux fonctions veulent empiler [0].',
-        'Position d’analyse — Une seule des deux fonctions peut atteindre le cas de base maintenant ; l’autre cassera si on tente aussi de l’empiler.',
-        'Question pour la classe — Quelle fonction sauver en premier, et que nous apprend ce choix sur les appels récursifs qui consomment de la mémoire ?'
+        'Tour 3 — Fonction Factorielle a atteint [0], puis Joueur Cyan a lancé Compactage Mémoire avec R=1.',
+        'Tour 3 — Joueur Orange a réduit la mémoire libre de Cyan à 0. Compactage veut empiler [0], mais Factorielle peut d’abord dépiler [0].',
+        'Position d’analyse — Si Factorielle est mise à jour en premier, elle dépile [0], libère 1 mémoire, puis Compactage peut atteindre son cas de base sans casser.',
+        'Question pour la classe — Dans quel ordre mettre à jour les fonctions pour ne rien casser, et pourquoi dépiler peut-il sauver un empilage ?'
       ]);
       break;
 
@@ -1268,6 +1268,140 @@ export function loadDemoScenario(name) {
         'Question pour la classe — Pourquoi Stack Spike est-il légal sur une pile à 5 cadres, et pourquoi provoque-t-il une casse immédiate ici ?'
       ]);
       break;
+
+    case 'overflow_avoidable':
+      game.turn = 6;
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('tri_fusion', 4, { frames: [4, 3, 2, 1, 'P'], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['purge', 'ram', 'sentinelle', 'collecte'],
+        discard: ['factorielle', 'pollution'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
+        memFree: 5
+      });
+      configureDemoPlayer(orange, {
+        hand: ['stack_spike', 'injection', 'glouton', 'hotfix'],
+        discard: ['purge', 'sentinelle'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 8
+      });
+      game.phase = PHASES.ACTION;
+      addDemoHistory(game, [
+        'Démonstration 7 — Overflow évitable.',
+        'Tour 2 — Joueur Cyan a lancé Tri Fusion Tempéré avec R=4.',
+        'Tours 3 à 5 — Tri Fusion a empilé plusieurs cadres, puis un parasite a été ajouté.',
+        'Tour 6 — La pile de Tri Fusion contient exactement 5 cadres, dont un parasite. Joueur Orange garde Stack Spike en main.',
+        'Position d’analyse — Si Cyan passe sans agir, Stack Spike peut ajouter 2 parasites et provoquer une casse. Purge Contrôlée peut retirer le parasite avant cette menace.',
+        'Question pour la classe — Pourquoi retirer un seul parasite change-t-il le résultat de Stack Spike sur cette pile ?'
+      ]);
+      break;
+
+    case 'profitable_reboot':
+      game.turn = 5;
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('quicksort', 3, { broken: true, frames: [3, 2, 1, 0, 'P', 'P'], reachedZero: true })
+        ],
+        hand: ['purge', 'swap', 'collecte'],
+        discard: ['factorielle', 'sentinelle', 'pollution', 'ram'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 1
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('glouton', 2, { frames: [2, 1], reachedZero: false, nextValue: 0 })
+        ],
+        hand: ['stack_spike', 'injection', 'hotfix', 'factorielle'],
+        discard: ['purge'],
+        score: 0,
+        memFree: 8
+      });
+      game.phase = PHASES.UPDATE;
+      addDemoHistory(game, [
+        'Démonstration 8 — Reboot volontaire rentable.',
+        'Tour 2 — Joueur Cyan a lancé Quicksort Agressif avec R=3 pour viser un gros bonus.',
+        'Tour 4 — Quicksort a cassé après une surcharge de parasites et occupe encore beaucoup de mémoire.',
+        'Tour 5 — Début du tour de Cyan : aucune action n’a encore été faite, le reboot volontaire est encore disponible.',
+        'Position d’analyse — Cyan a peu de mémoire libre, une main médiocre et une fonction cassée qui bloque le plateau. Rebooter libère la fonction, recycle la main et redonne une main de départ.',
+        'Question pour la classe — Pourquoi le reboot peut-il être meilleur qu’essayer de sauver cette fonction à tout prix ?'
+      ]);
+      break;
+
+    case 'opponent_interrupt':
+      game.turn = 6;
+      game.currentPlayerIndex = 1;
+      configureDemoPlayer(cyan, {
+        hand: ['stack_spike', 'injection', 'purge', 'factorielle'],
+        discard: ['collecte', 'sentinelle'],
+        completed: demoCompleted(['factorielle']),
+        score: 6,
+        memFree: 8
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('tri_fusion', 4, { frames: [4, 3, 2, 1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['ram', 'hotfix', 'glouton', 'sentinelle'],
+        discard: ['purge', 'recherche'],
+        completed: demoCompleted(['sentinelle', 'recherche']),
+        score: 8,
+        memFree: 5
+      });
+      game.phase = PHASES.UPDATE;
+      addDemoHistory(game, [
+        'Démonstration 9 — Interrupt adverse lisible.',
+        'Tours précédents — Joueur Orange a déjà terminé deux fonctions et prépare une grosse Tri Fusion.',
+        'Tour 6 — C’est le tour de Joueur Orange, mais Joueur Cyan possède Stack Spike en main.',
+        'Tour 6 — Tri Fusion contient exactement 5 cadres : la condition de Stack Spike est visible.',
+        'Position d’analyse — Même pendant le tour adverse, Cyan peut jouer un Interrupt si la condition est remplie et qu’il a assez de mémoire.',
+        'Question pour la classe — À quel moment Cyan peut-il interrompre, et pourquoi cette carte est-elle légale maintenant ?'
+      ]);
+      break;
+
+    case 'forced_reboot': {
+      game.turn = 7;
+      const exhaustedDiscard = [
+        'factorielle', 'factorielle', 'tri_fusion', 'recherche', 'sentinelle', 'sentinelle',
+        'glouton', 'glouton', 'archiviste', 'expansion', 'compactage',
+        'hotfix', 'collecte', 'collecte', 'stack_spike', 'injection', 'overclock',
+        'debug', 'planificateur', 'ram', 'pollution', 'pollution', 'purge', 'purge', 'swap'
+      ];
+      configureDemoPlayer(cyan, {
+        active: [
+          demoFunction('quicksort', 3, { frames: [3, 2, 1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: [],
+        discard: exhaustedDiscard,
+        completed: demoCompleted(['sentinelle', 'factorielle']),
+        score: 8,
+        memTotal: 4,
+        memFree: 0
+      });
+      configureDemoPlayer(orange, {
+        active: [
+          demoFunction('glouton', 1, { frames: [1, 0], reachedZero: true, nextValue: -1 })
+        ],
+        hand: ['ram', 'hotfix', 'pollution', 'sentinelle'],
+        discard: ['purge'],
+        completed: demoCompleted(['sentinelle']),
+        score: 2,
+        memFree: 8
+      });
+      game.phase = PHASES.DRAW;
+      addDemoHistory(game, [
+        'Démonstration 10 — Reboot forcé.',
+        'Tours précédents — Joueur Cyan a beaucoup pioché et ses deux piles sont maintenant vides.',
+        'Tour 7 — Cyan doit piocher pendant la phase de pioche, mais il ne reste aucune carte dans ses piles.',
+        'Tour 7 — L’épuisement retire 1 mémoire totale. La mémoire utilisée par Quicksort devient alors supérieure à la mémoire totale.',
+        'Position d’analyse — La règle impose immédiatement un reboot forcé : Cyan ne choisit pas le moment, il subit la remise à zéro.',
+        'Question pour la classe — Quelle différence voyez-vous entre un reboot volontaire rentable et un reboot forcé déclenché trop tard ?'
+      ]);
+      break;
+    }
 
     default:
       return loadDemoScenario('depth_choice');

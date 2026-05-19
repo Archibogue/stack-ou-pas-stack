@@ -149,6 +149,27 @@ function assertPlanifierAndHotfix() {
   assert.equal(player.active[0].memUsed, player.active[0].cost);
 }
 
+function assertOverclockStillAllowsExtraUpdate() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+
+  player.hand = [createCard('factorielle'), createCard('overclock')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 2 }), true);
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  const func = player.active[0];
+
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(func.id), true);
+  assert.deepEqual(func.frames, [2, 1]);
+  assert.equal(player.updatedThisTurn.includes(func.id), true);
+  assert.equal(engine.updateFunction(func.id), false, 'Normal update cannot run twice in the same update phase');
+  assert.equal(engine.canUseOverclock(func.id), true, 'Overclock remains legal after the normal update');
+  assert.equal(engine.useOverclock(func.id), true);
+  assert.deepEqual(func.frames, [2, 1, 0], 'Overclock performs the extra update on the same function');
+}
+
 function assertRebootStopsActions() {
   let state = engine.newGame('Ada', 'Grace');
   let player = state.players[0];
@@ -377,7 +398,11 @@ function assertDemoScenarios() {
     'strategic_memory',
     'repair_or_clean',
     'ram',
-    'stack_spike_break'
+    'stack_spike_break',
+    'overflow_avoidable',
+    'profitable_reboot',
+    'opponent_interrupt',
+    'forced_reboot'
   ];
   const expectedTurns = {
     depth_choice: 3,
@@ -385,7 +410,11 @@ function assertDemoScenarios() {
     strategic_memory: 4,
     repair_or_clean: 5,
     ram: 3,
-    stack_spike_break: 6
+    stack_spike_break: 6,
+    overflow_avoidable: 6,
+    profitable_reboot: 5,
+    opponent_interrupt: 6,
+    forced_reboot: 7
   };
 
   scenarios.forEach((scenario) => {
@@ -416,21 +445,32 @@ function assertDemoScenarios() {
 
   state = engine.loadDemoScenario('strategic_memory');
   cyan = state.players[0];
-  const compactage = cyan.active.find((func) => func.cardKey === 'compactage');
-  const factorielle = cyan.active.find((func) => func.cardKey === 'factorielle');
+  let compactage = cyan.active.find((func) => func.cardKey === 'compactage');
+  let factorielle = cyan.active.find((func) => func.cardKey === 'factorielle');
   assert.equal(cyan.memTotal, 11);
-  assert.equal(cyan.memFree, 1);
-  assert.deepEqual(factorielle.frames, [2, 1]);
-  assert.equal(factorielle.reachedZero, false);
+  assert.equal(cyan.memFree, 0);
+  assert.deepEqual(factorielle.frames, [2, 1, 0]);
+  assert.equal(factorielle.reachedZero, true);
   assert.deepEqual(compactage.frames, [1]);
   assert.equal(compactage.reachedZero, false);
-  assert.match(engine.getNextFunctionEffect(factorielle).text, /empile \[0\]/);
+  assert.match(engine.getNextFunctionEffect(factorielle).text, /dépile \[0\]/);
   assert.match(engine.getNextFunctionEffect(compactage).text, /empile \[0\]/);
+  assert.equal(engine.updateFunction(factorielle.id), true);
+  assert.deepEqual(factorielle.frames, [2, 1]);
+  assert.equal(cyan.memFree, 1, 'Unwinding Factorielle first frees one memory');
   assert.equal(engine.updateFunction(compactage.id), true);
   assert.deepEqual(compactage.frames, [1, 0]);
   assert.equal(cyan.memFree, 0);
+  assert.equal(cyan.active.some((func) => func.broken), false, 'Correct update order breaks no function');
+
+  state = engine.loadDemoScenario('strategic_memory');
+  cyan = state.players[0];
+  compactage = cyan.active.find((func) => func.cardKey === 'compactage');
+  factorielle = cyan.active.find((func) => func.cardKey === 'factorielle');
+  assert.equal(engine.updateFunction(compactage.id), true);
+  assert.equal(compactage.broken, true, 'Stacking first with no free memory breaks Compactage');
   assert.equal(engine.updateFunction(factorielle.id), true);
-  assert.equal(factorielle.broken, true, 'The second one-step-from-base function breaks if no memory remains');
+  assert.equal(factorielle.broken, false);
 
   state = engine.loadDemoScenario('repair_or_clean');
   cyan = state.players[0];
@@ -454,6 +494,53 @@ function assertDemoScenarios() {
   const stackSpike = cyan.hand.find((card) => card.key === 'stack_spike');
   assert.equal(engine.playCard(0, stackSpike.id, { functionId: orange.active[0].id }), true);
   assert.equal(orange.active[0].broken, true, 'Stack Spike should break the 5-frame function');
+
+  state = engine.loadDemoScenario('overflow_avoidable');
+  cyan = state.players[0];
+  let vulnerable = cyan.active[0];
+  let purge = cyan.hand.find((card) => card.key === 'purge');
+  assert.equal(vulnerable.frames.length, 5);
+  assert.equal(engine.playCard(0, purge.id, { functionId: vulnerable.id }), true);
+  assert.equal(vulnerable.frames.length, 4, 'Purge removes the parasite before Stack Spike');
+  let orangePlayer = state.players[1];
+  let spike = orangePlayer.hand.find((card) => card.key === 'stack_spike');
+  assert.equal(engine.playCard(1, spike.id, { functionId: vulnerable.id }), true);
+  assert.equal(vulnerable.broken, false, 'Purge first prevents Stack Spike from breaking the function');
+
+  state = engine.loadDemoScenario('overflow_avoidable');
+  cyan = state.players[0];
+  vulnerable = cyan.active[0];
+  orangePlayer = state.players[1];
+  spike = orangePlayer.hand.find((card) => card.key === 'stack_spike');
+  assert.equal(engine.playCard(1, spike.id, { functionId: vulnerable.id }), true);
+  assert.equal(vulnerable.broken, true, 'Ignoring the parasite lets Stack Spike break the function');
+
+  state = engine.loadDemoScenario('profitable_reboot');
+  cyan = state.players[0];
+  assert.equal(engine.canRebootCurrentPlayer(), true);
+  assert.equal(engine.rebootCurrentPlayer(), true);
+  assert.equal(cyan.active.length, 0);
+  assert.equal(cyan.hand.length, 5);
+  assert.ok(cyan.memFree > 1, 'Voluntary reboot frees the stuck broken function memory');
+
+  state = engine.loadDemoScenario('opponent_interrupt');
+  cyan = state.players[0];
+  orangePlayer = state.players[1];
+  spike = cyan.hand.find((card) => card.key === 'stack_spike');
+  assert.equal(state.currentPlayerIndex, 1);
+  assert.equal(engine.canPlayCard(0, spike.id), true, 'Cyan can interrupt during Orange turn');
+  assert.equal(engine.playCard(0, spike.id, { functionId: orangePlayer.active[0].id }), true);
+  assert.equal(orangePlayer.active[0].broken, true);
+
+  state = engine.loadDemoScenario('forced_reboot');
+  cyan = state.players[0];
+  assert.equal(cyan.functionsDeck.length, 0);
+  assert.equal(cyan.systemDeck.length, 0);
+  assert.equal(cyan.active.length, 1);
+  assert.equal(engine.drawForPlayer('system'), null);
+  assert.equal(cyan.memTotal, 3);
+  assert.equal(cyan.active.length, 0, 'Exhaustion can trigger a forced reboot');
+  assert.equal(cyan.hand.length, 5);
 }
 
 assertMapsEqual(deckCompositionFromCards(), parseDeckMarkdown());
@@ -465,6 +552,7 @@ assertFunctionMemoryLifecycle();
 assertStructuredLog();
 assertUndo();
 assertPlanifierAndHotfix();
+assertOverclockStillAllowsExtraUpdate();
 assertRebootStopsActions();
 assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();

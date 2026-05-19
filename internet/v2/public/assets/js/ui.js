@@ -23,7 +23,11 @@ const DEMO_SCENARIOS = [
   ['strategic_memory', '3. Choix mémoire'],
   ['repair_or_clean', '4. Nettoyer / réparer'],
   ['ram', '5. Barrette RAM'],
-  ['stack_spike_break', '6. Stack Spike']
+  ['stack_spike_break', '6. Stack Spike'],
+  ['overflow_avoidable', '7. Overflow évitable'],
+  ['profitable_reboot', '8. Reboot rentable'],
+  ['opponent_interrupt', '9. Interrupt lisible'],
+  ['forced_reboot', '10. Reboot forcé']
 ];
 
 const ARCADE_SPRITES = {
@@ -521,6 +525,7 @@ function renderRemoteLocalConsole(player) {
           createElement('strong', { textContent: 'Main' }),
           createElement('span', { className: 'chip', textContent: `${player.hand.length} carte(s)` })
         ]),
+        renderRemoteDeckShelf(player),
         createElement('div', { className: 'hand-cards remote-hand-cards', style: `--cards:${Math.max(1, player.hand.length)}` }, player.hand.length
           ? player.hand.map((card, index) => renderCard(player, card, index, { compact: true, previewOnClick: true }))
           : [emptyState('Main vide')])
@@ -529,10 +534,42 @@ function renderRemoteLocalConsole(player) {
   ]);
 }
 
+function renderRemoteDeckShelf(player) {
+  const topDiscard = player.discard[player.discard.length - 1];
+  return createElement('div', { className: 'remote-card-shelf' }, [
+    renderRemotePileCard('Fonctions', player.functionsDeck.length, 'function'),
+    renderRemotePileCard('Système', player.systemDeck.length, 'system'),
+    topDiscard
+      ? renderRemoteDiscardCard(topDiscard, player.discard.length)
+      : createElement('div', { className: 'remote-table-card discard empty-discard' }, [
+        createElement('span', { className: 'remote-table-card-label', textContent: 'Défausse' }),
+        createElement('strong', { textContent: 'Vide' }),
+        createElement('span', { className: 'remote-table-card-count', textContent: '0' })
+      ])
+  ]);
+}
+
+function renderRemotePileCard(label, count, tone) {
+  return createElement('div', { className: `remote-table-card deck-back ${tone}` }, [
+    createElement('span', { className: 'remote-table-card-label', textContent: label }),
+    createElement('strong', { textContent: count }),
+    createElement('span', { className: 'remote-table-card-count', textContent: 'pioche' })
+  ]);
+}
+
+function renderRemoteDiscardCard(card, count) {
+  return createElement('div', { className: `remote-table-card discard ${cardTypeClass(card.type)}` }, [
+    createElement('span', { className: 'remote-table-card-label', textContent: 'Défausse' }),
+    createElement('strong', { textContent: card.name }),
+    createElement('span', { className: 'remote-table-card-count', textContent: `${count} carte(s)` })
+  ]);
+}
+
 function renderRemoteFunctionCard(player, fn, options = {}) {
   const state = getState();
   const canAct = Boolean(options.actions) && canControlPlayer(player.index);
-  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const alreadyUpdated = player.updatedThisTurn.includes(fn.id);
+  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken && !alreadyUpdated;
   const modeClass = fn.broken ? 'broken' : fn.reachedZero ? 'unwinding' : 'stacking';
   const nextEffect = getNextFunctionEffect(fn);
   return createElement('div', {
@@ -671,7 +708,8 @@ function pileInfo(title, count) {
 
 function renderFunctionCard(player, fn) {
   const state = getState();
-  const isCurrent = canControlPlayer(player.index) && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const alreadyUpdated = player.updatedThisTurn.includes(fn.id);
+  const isCurrent = canControlPlayer(player.index) && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken && !alreadyUpdated;
   const modeClass = fn.broken ? 'broken' : fn.reachedZero ? 'unwinding' : 'stacking';
   const nextEffect = getNextFunctionEffect(fn);
   const effects = getFunctionEffectSummary(fn);
@@ -800,7 +838,8 @@ function showHardwarePreview(hardware) {
 function showFunctionPreview(player, fn, options = {}) {
   const state = getState();
   const canAct = Boolean(options.actions) && canControlPlayer(player.index);
-  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken;
+  const alreadyUpdated = player.updatedThisTurn.includes(fn.id);
+  const canUpdate = canAct && state.currentPlayerIndex === player.index && state.phase === PHASES.UPDATE && !fn.broken && !alreadyUpdated;
   const effects = getFunctionEffectSummary(fn);
   const nextEffect = getNextFunctionEffect(fn);
   const content = createElement('div', { className: 'function-preview-content' }, [
@@ -927,9 +966,11 @@ function renderCenterPanel(state) {
   ]) : null;
 
   return createElement('section', { className: `panel panel-body phase-card${isRemoteState(state) ? ' remote-phase-card' : ''}` }, [
-    createElement('h2', { textContent: 'État du tour' }),
+    createElement('h2', { className: 'phase-title-row' }, [
+      createElement('span', { textContent: 'État du tour' }),
+      createElement('span', { className: `phase-current phase-current-${phaseClass(state.phase)}`, textContent: phaseText })
+    ]),
     renderPhaseRail(state),
-    createElement('div', { className: 'big', textContent: phaseText }),
     createElement('div', { className: 'turn-owner', textContent: remoteTurnHint(state) }),
     createElement('div', { className: 'phase-actions' }, buttons),
     winnerBox,
