@@ -102,10 +102,11 @@
 
     <section id="tour" class="panel panel-body rules-section">
       <h2>4. Ordre d’un tour</h2>
+      <p>Au tout début de son tour, le joueur peut effectuer un reboot volontaire s’il n’a encore fait aucune autre action ce tour-ci.</p>
       <ol>
         <li><strong>Phase de mise à jour</strong> : le joueur actif met à jour toutes ses fonctions actives non cassées, dans l’ordre de son choix.</li>
         <li><strong>Phase de pioche</strong> : il pioche 1 carte dans la pile Système. Le premier joueur saute cette phase au tout premier tour.</li>
-        <li><strong>Phase de conception</strong> : il peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.</li>
+        <li><strong>Phase de conception</strong> : il peut jouer des Fonctions, Commandes et Hardware.</li>
         <li><strong>Fin de tour</strong> : les effets temporaires cessent, puis le tour passe à l’autre joueur.</li>
       </ol>
       <p>On ne peut pas tirer librement une nouvelle Fonction pendant la phase de pioche. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.</p>
@@ -177,7 +178,8 @@
 
     <section id="reboot" class="panel panel-body rules-section">
       <h2>9. Reboot</h2>
-      <p>Pendant sa phase de conception, un joueur peut effectuer un reboot volontaire à la place de ses autres actions du tour.</p>
+      <p>Au début de son tour, avant toute autre action du tour, un joueur peut effectuer un reboot volontaire. S’il a déjà mis à jour une fonction, pioché ou joué une carte ce tour-ci, il ne peut plus rebooter volontairement.</p>
+      <p>Le reboot volontaire remplace toutes ses autres actions du tour.</p>
       <ol>
         <li>Il défausse ses fonctions actives, intactes ou cassées.</li>
         <li>Les piles associées sont retirées sans produire d’effet.</li>

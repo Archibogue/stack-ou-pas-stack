@@ -27,11 +27,13 @@ Le premier joueur ne pioche pas au premier tour.
 
 ## Ordre obligatoire d’un tour
 
-Chaque tour suit obligatoirement cet ordre :
+Au tout début de son tour, le joueur peut effectuer un reboot volontaire s’il n’a encore fait aucune autre action ce tour-ci.
+
+S’il ne reboote pas, chaque tour suit ensuite obligatoirement cet ordre :
 
 1. **Phase de mise à jour** : toutes les fonctions actives non cassées du joueur actif sont mises à jour, dans l’ordre choisi par ce joueur.
 2. **Phase de pioche** : le joueur pioche 1 carte dans la pile Système.
-3. **Phase de conception** : le joueur peut jouer des Fonctions, Commandes et Hardware, ou effectuer un reboot volontaire.
+3. **Phase de conception** : le joueur peut jouer des Fonctions, Commandes et Hardware.
 4. **Fin de tour** : les effets temporaires cessent.
 
 Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts. Une Interrupt peut être jouée pendant le tour adverse quand sa condition de réaction est explicitement remplie et qu’une cible légale existe.
@@ -98,7 +100,9 @@ Un parasite ajouté avant `[0]` ne bloque pas la descente : la fonction continue
 
 ## Reboot
 
-Pendant sa phase de conception, un joueur peut effectuer un reboot volontaire à la place de ses autres actions :
+Au début de son tour, avant toute autre action du tour, un joueur peut effectuer un reboot volontaire. S’il a déjà mis à jour une fonction, pioché ou joué une carte ce tour-ci, il ne peut plus rebooter volontairement.
+
+Le reboot volontaire remplace toutes ses autres actions du tour :
 
 - il défausse ses fonctions actives ;
 - il retire les piles associées sans effet ;

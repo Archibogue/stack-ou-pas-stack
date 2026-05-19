@@ -150,18 +150,39 @@ function assertPlanifierAndHotfix() {
 }
 
 function assertRebootStopsActions() {
-  const state = engine.newGame('Ada', 'Grace');
-  const player = state.players[0];
-  player.hand = [createCard('factorielle')];
-  engine.playCard(0, player.hand[0].id, { R: 1 });
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
   player.hand = [createCard('swap')];
 
+  assert.equal(engine.canRebootCurrentPlayer(), true, 'Voluntary reboot is available before any turn action');
   assert.equal(engine.rebootCurrentPlayer(), true);
   assert.equal(engine.canPlayCard(), false, 'No card can be played after a voluntary reboot this turn');
   assert.equal(player.active.length, 0);
   assert.equal(player.hand.length, 5);
   assert.equal(player.hand.filter((card) => card.type === 'Fonction').length, 3);
   assert.equal(player.hand.filter((card) => card.type !== 'Fonction').length, 2);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 1 }), true);
+  assert.equal(engine.canRebootCurrentPlayer(), false, 'A card play blocks voluntary reboot for the rest of the turn');
+  assert.equal(engine.rebootCurrentPlayer(), false);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  assert.equal(engine.rebootCurrentPlayer(), true, 'Reboot can happen during the opening update window');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 1 }), true);
+  engine.endTurn();
+  player = state.players[1];
+  state.phase = rules.PHASES.DRAW;
+  assert.ok(engine.drawForPlayer('system'));
+  assert.equal(engine.canRebootCurrentPlayer(), false, 'A draw blocks voluntary reboot for the rest of the turn');
 }
 
 function assertInterruptsCanReactOnOpponentTurn() {
@@ -234,6 +255,28 @@ function assertDrawRulesAndFunctionReplacement() {
   assert.equal(player.functionsDeck.length, functionsBeforeCompletion - 1, 'Completing a function draws exactly one replacement Function');
   assert.equal(player.hand.filter((card) => card.type === 'Fonction').length, 1);
   assert.equal(player.systemDeck.length, systemsBeforeCompletion - 1, 'Factorielle base case draws from the System deck');
+}
+
+function assertPeekEffectsRevealDeckTopsWithoutDrawing() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  const topFunction = createCard('factorielle');
+  const topSystem = createCard('swap');
+  player.functionsDeck = [topFunction, createCard('sentinelle')];
+  player.systemDeck = [topSystem, createCard('purge')];
+  player.hand = [createCard('sentinelle')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 0 }), true);
+  const func = player.active[0];
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+
+  assert.equal(engine.updateFunction(func.id), true);
+  const consultation = state.log.find((entry) => entry.text.includes('dessus des piles'));
+  assert.ok(consultation, 'A peek effect writes the revealed cards to the log');
+  assert.match(consultation.text, new RegExp(topFunction.name));
+  assert.match(consultation.text, new RegExp(topSystem.name));
+  assert.equal(player.systemDeck[0].id, topSystem.id, 'Peeking does not draw the System card');
 }
 
 function assertEndTurnInActionPhase() {
@@ -394,6 +437,7 @@ assertPlanifierAndHotfix();
 assertRebootStopsActions();
 assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();
+assertPeekEffectsRevealDeckTopsWithoutDrawing();
 assertEndTurnInActionPhase();
 assertDemoScenarios();
 

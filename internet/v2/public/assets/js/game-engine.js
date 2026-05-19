@@ -112,6 +112,7 @@ export function beginTurn() {
   player.overclockTarget = null;
   player.overclockUsed = false;
   player.rebootedThisTurn = false;
+  player.turnActionsTaken = false;
   player.completedThisTurn = false;
   gameState.phase = PHASES.UPDATE;
   logAction(gameState, `Début du tour ${gameState.turn} de ${player.name} : phase de mise à jour.`, 'sys');
@@ -280,6 +281,19 @@ function loseMemory(player, amount) {
   clampMemory(player);
 }
 
+function markTurnAction(player) {
+  if (player?.index === gameState.currentPlayerIndex) {
+    player.turnActionsTaken = true;
+  }
+}
+
+export function canRebootCurrentPlayer() {
+  if (!gameState || gameState.winner !== null) return false;
+  if (![PHASES.UPDATE, PHASES.DRAW, PHASES.ACTION].includes(gameState.phase)) return false;
+  const player = getCurrentPlayer();
+  return Boolean(player && !player.rebootedThisTurn && !player.turnActionsTaken);
+}
+
 export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId = null) {
   if (!gameState || gameState.winner !== null) return false;
   const player = gameState.players[playerIndex];
@@ -307,6 +321,7 @@ export function drawForPlayer(deckType) {
   const undoPoint = createUndoPoint();
   const player = getCurrentPlayer();
   const card = drawFromDeck(player, 'system');
+  markTurnAction(player);
   if (!card) {
     const changed = handleDeckExhaustion(player);
     if (!changed) logAction(gameState, `${player.name} ne peut pas piocher : la pile Système est vide.`, 'warn');
@@ -367,6 +382,7 @@ export function updateFunction(functionId, extra = false, options = {}) {
   if (!func || func.broken) return false;
   if (player.updatedThisTurn.includes(func.id) && !extra) return false;
   if (!options.skipUndo) createUndoPoint();
+  markTurnAction(player);
 
   if (!func.reachedZero) {
     if (func.frames.length >= MAX_FRAMES_PER_FUNCTION) {
@@ -439,10 +455,10 @@ function applyBaseEffect(player, func) {
       logAction(gameState, `${func.name} — cas de base : révèle puis prend ${formatDrawnCards(drawSystemCards(player, 1))}.`, 'good');
       break;
     case 'sentinelle':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde le dessus d’une pile.`, 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde le dessus des piles : ${formatPeekedCards(player, 1)}.`, 'sys');
       break;
     case 'archiviste':
-      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde 2 cartes.`, 'sys');
+      logAction(gameState, `${func.name} — cas de base : ${player.name} regarde 2 cartes : ${formatPeekedCards(player, 2)}.`, 'sys');
       break;
     default:
       break;
@@ -469,7 +485,7 @@ function applyUpEffect(player, func, value) {
       removeParasites(player, 1);
       break;
     case 'tri_fusion':
-      logAction(gameState, `${func.name} — remontée [${value}] : réordonne virtuellement les cartes du dessus.`, 'sys');
+      logAction(gameState, `${func.name} — remontée [${value}] : cartes du dessus à réordonner virtuellement : ${formatPeekedCards(player, 2)}.`, 'sys');
       break;
     default:
       break;
@@ -585,6 +601,19 @@ function formatDrawnCards(cards) {
   return `${cards.length} carte(s) piochée(s) : ${shown}${suffix}`;
 }
 
+function formatPeekedCards(player, count) {
+  const piles = [
+    ['Fonctions', player.functionsDeck],
+    ['Système', player.systemDeck]
+  ];
+  return piles
+    .map(([name, deck]) => {
+      const cards = deck.slice(0, count).map((card) => card.name);
+      return `${name}: ${cards.length ? cards.join(', ') : 'vide'}`;
+    })
+    .join(' | ');
+}
+
 function removeCardFromHand(player, cardId) {
   const index = player.hand.findIndex((c) => c.id === cardId);
   if (index === -1) return null;
@@ -657,12 +686,13 @@ export function useOverclock(functionId) {
 }
 
 export function rebootCurrentPlayer() {
-  if (gameState.phase !== PHASES.ACTION || gameState.winner !== null) return false;
+  if (!canRebootCurrentPlayer()) return false;
   const player = getCurrentPlayer();
-  if (player.rebootedThisTurn) return false;
   createUndoPoint();
   rebootPlayer(player, false);
   player.rebootedThisTurn = true;
+  player.turnActionsTaken = true;
+  gameState.phase = PHASES.ACTION;
   persistGameState();
   return true;
 }
@@ -732,6 +762,7 @@ export function endTurn() {
   player.overclockTarget = null;
   player.overclockUsed = false;
   player.rebootedThisTurn = false;
+  player.turnActionsTaken = false;
   player.completedThisTurn = false;
   clampMemory(player);
   gameState.currentPlayerIndex = 1 - gameState.currentPlayerIndex;
@@ -755,17 +786,20 @@ export function playCard(playerIndex, cardId, targetData = {}) {
   let result = false;
   if (card.type === 'Fonction') {
     result = playFunctionCard(player, card, targetData.R);
+    if (result) markTurnAction(player);
     if (result) persistGameState();
     else discardUndoPoint(undoPoint);
     return result;
   }
   if (card.type === 'Hardware') {
     result = playHardwareCard(player, card, targetData);
+    if (result) markTurnAction(player);
     if (result) persistGameState();
     else discardUndoPoint(undoPoint);
     return result;
   }
   result = playSystemCard(player, card, targetData);
+  if (result) markTurnAction(player);
   if (result) persistGameState();
   else discardUndoPoint(undoPoint);
   return result;
@@ -1245,6 +1279,7 @@ export function loadDemoScenario(name) {
     player.swapActive = false;
     player.tempMemory = 0;
     player.rebootedThisTurn = false;
+    player.turnActionsTaken = false;
     player.completedThisTurn = false;
   });
 

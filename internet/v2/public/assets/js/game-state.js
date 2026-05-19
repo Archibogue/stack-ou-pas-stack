@@ -32,6 +32,7 @@ export function createPlayer(name, index) {
     swapActive: false,
     tempMemory: 0,
     rebootedThisTurn: false,
+    turnActionsTaken: false,
     completedThisTurn: false
   };
 }
@@ -112,6 +113,7 @@ export function restoreState(data) {
     player.swapActive = Boolean(player.swapActive);
     player.tempMemory = player.tempMemory || 0;
     player.rebootedThisTurn = Boolean(player.rebootedThisTurn);
+    player.turnActionsTaken = Boolean(player.turnActionsTaken);
     player.completedThisTurn = Boolean(player.completedThisTurn);
   });
   return state;

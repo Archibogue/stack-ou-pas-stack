@@ -1,5 +1,5 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
@@ -295,7 +295,7 @@ function showHomeScreen() {
       createElement('li', { textContent: 'Les cadres parasites comptent dans la pile et n’offrent aucun effet.' }),
       createElement('li', { textContent: 'Une fonction casse si elle doit recevoir un 7e cadre.' }),
       createElement('li', { textContent: 'Les Commandes/Interrupts sont payées et libèrent leur mémoire après résolution.' }),
-      createElement('li', { textContent: 'Le reboot volontaire est possible uniquement pendant la phase de conception.' })
+      createElement('li', { textContent: 'Le reboot volontaire se fait au début du tour, avant toute mise à jour, pioche ou carte jouée.' })
     ])
   ]);
 
@@ -917,7 +917,7 @@ function renderCenterPanel(state) {
       renderGameScreen();
       if (rebooted) spawnArcadeEffect('reboot', 'REBOOT');
     },
-    disabled: !canUseTurnControls || state.phase !== PHASES.ACTION || state.winner !== null || currentPlayer.rebootedThisTurn
+    disabled: !canUseTurnControls || !canRebootCurrentPlayer()
   }, ['Reboot volontaire']));
 
   const winnerBox = state.winner !== null ? createElement('div', { className: 'winner-banner' }, [
@@ -955,7 +955,7 @@ function renderHelpPanel() {
     createElement('ul', {}, [
       createElement('li', { textContent: 'Fonctions actives non cassées = mise à jour obligatoire.' }),
       createElement('li', { textContent: 'Les Interrupts peuvent être jouées pendant le tour adverse si leur condition est remplie.' }),
-      createElement('li', { textContent: 'Pas de pioche libre dans la pile Fonctions : remplacement automatique à la terminaison, ou reboot.' }),
+      createElement('li', { textContent: 'Pas de pioche libre dans la pile Fonctions : remplacement automatique à la terminaison, ou reboot de début de tour.' }),
       createElement('li', { textContent: 'Les fonctions cassées restent en jeu et occupent de la mémoire.' }),
       createElement('li', { textContent: 'Nettoyer libère la mémoire et défausse la fonction.' }),
       createElement('li', { textContent: 'Réparer remet la fonction en état selon le texte de la carte.' })
