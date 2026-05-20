@@ -21,6 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
 
 const engine = await import('../public/assets/js/game-engine.js');
+const bot = await import('../public/assets/js/bot.js');
 const { CARD_DEFINITIONS, DECK_COMPOSITION, createCard, buildDecks } = await import('../public/assets/js/cards.js');
 const rules = await import('../public/assets/js/rules.js');
 
@@ -66,6 +67,83 @@ function assertInitialSetup() {
   assert.equal(state.players[0].hand.filter((card) => card.type === 'Fonction').length, 3);
   assert.equal(state.players[0].hand.filter((card) => card.type !== 'Fonction').length, 2);
   assert.equal(state.phase, rules.PHASES.ACTION, 'First player skips draw on first turn when no update is pending');
+}
+
+function assertSoloSetup() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  assert.equal(state.soloMode, true);
+  assert.equal(state.botIndex, 1);
+  assert.equal(state.players[0].isBot, false);
+  assert.equal(state.players[1].isBot, true);
+
+  const restored = engine.loadGame(JSON.parse(JSON.stringify({
+    players: state.players.map((player) => {
+      const copy = { ...player };
+      delete copy.isBot;
+      return copy;
+    }),
+    currentPlayerIndex: 0,
+    phase: rules.PHASES.ACTION,
+    turn: 1,
+    winner: null,
+    log: []
+  })));
+  assert.equal(restored.players[0].isBot, false, 'Old saves without isBot remain human by default');
+  assert.equal(restored.soloMode, false, 'Old saves without soloMode remain normal local games');
+}
+
+function assertBotCanPassTurnCycle() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  state.firstTurn = false;
+  computer.active = [];
+  computer.hand = [];
+  computer.systemDeck = [createCard('swap')];
+  const systemBefore = computer.systemDeck.length;
+
+  assert.equal(bot.runBotTurn(1), true);
+  assert.equal(computer.systemDeck.length, systemBefore - 1, 'Bot draws System during draw phase');
+  assert.equal(state.currentPlayerIndex, 0, 'Bot ends its turn and returns control to human');
+  assert.equal(state.phase, rules.PHASES.DRAW);
+}
+
+function assertBotDoesNotPlayIllegalMove() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.hand = [createCard('pollution')];
+  computer.memFree = computer.memTotal;
+  state.players[0].active = [];
+
+  assert.equal(bot.runBotTurn(1), true);
+  assert.equal(computer.hand.some((card) => card.key === 'pollution'), true, 'Bot keeps a card when no legal target exists');
+  assert.equal(computer.discard.some((card) => card.key === 'pollution'), false);
+  assert.equal(state.currentPlayerIndex, 0);
+}
+
+function assertBotStackSpikeReaction() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const human = state.players[0];
+  const computer = state.players[1];
+  human.hand = [createCard('tri_fusion')];
+  human.memFree = human.memTotal;
+  assert.equal(engine.playCard(0, human.hand[0].id, { R: 4 }), true);
+  const target = human.active[0];
+  target.frames = [4, 3, 2, 1];
+  target.nextValue = 0;
+  target.reachedZero = false;
+  target.memUsed = 6;
+  human.memFree = 5;
+  computer.hand = [createCard('stack_spike')];
+  computer.memFree = computer.memTotal;
+  state.phase = rules.PHASES.UPDATE;
+
+  assert.equal(bot.maybeReactToHumanAction(1), true);
+  assert.equal(computer.discard.some((card) => card.key === 'stack_spike'), true);
+  assert.equal(target.frames.filter((frame) => frame === 'P').length, 2);
 }
 
 function assertDeckBuild() {
@@ -631,6 +709,10 @@ assertMapsEqual(deckCompositionFromCards(), parseDeckMarkdown());
 assertRulesConstants();
 assertFunctionDescriptionsUseRulePhases();
 assertInitialSetup();
+assertSoloSetup();
+assertBotCanPassTurnCycle();
+assertBotDoesNotPlayIllegalMove();
+assertBotStackSpikeReaction();
 assertDeckBuild();
 assertFunctionMemoryLifecycle();
 assertStructuredLog();

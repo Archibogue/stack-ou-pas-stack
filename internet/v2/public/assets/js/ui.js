@@ -1,5 +1,6 @@
 import { PHASES } from './rules.js';
 import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { maybeReactToHumanAction, runBotTurn, startSoloGame } from './bot.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
@@ -13,6 +14,7 @@ let lastSeenLogOrder = 0;
 let lastCounterSnapshot = null;
 let counterDeltas = new Map();
 let openPendingDeckEffectId = null;
+let botThinking = false;
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -174,6 +176,10 @@ function isRemoteState(state = getState()) {
   return Boolean(state?.isRemote && remoteCodeFor(state));
 }
 
+function usesRemoteBoardLayout(state = getState()) {
+  return Boolean(isRemoteState(state) || state?.soloMode);
+}
+
 function getRemoteSeat(state = getState()) {
   if (!isRemoteState(state)) return null;
   return loadRemoteSeat(remoteCodeFor(state));
@@ -181,6 +187,7 @@ function getRemoteSeat(state = getState()) {
 
 function canControlPlayer(playerIndex) {
   const state = getState();
+  if (state?.players?.[playerIndex]?.isBot) return false;
   if (!isRemoteState(state)) return true;
   return getRemoteSeat(state) === playerIndex;
 }
@@ -190,11 +197,13 @@ function canViewPlayerHand(playerIndex) {
 }
 
 function canControlCurrentTurn(state = getState()) {
+  if (state?.players?.[state.currentPlayerIndex]?.isBot) return false;
   if (!isRemoteState(state)) return true;
   return getRemoteSeat(state) === state.currentPlayerIndex;
 }
 
 function remoteBottomPlayerIndex(state = getState()) {
+  if (state?.soloMode) return state.players.find((player) => !player.isBot)?.index ?? 0;
   const seat = getRemoteSeat(state);
   return seat === null ? 0 : seat;
 }
@@ -208,7 +217,10 @@ function remoteSeatText(state = getState()) {
 }
 
 function remoteTurnHint(state = getState()) {
-  if (!isRemoteState(state)) return `Joueur actif : ${state.players[state.currentPlayerIndex].name}`;
+  if (!isRemoteState(state)) {
+    const active = state.players[state.currentPlayerIndex];
+    return `Joueur actif : ${active.name}${active.isBot ? ' (ordinateur)' : ''}`;
+  }
   const seat = getRemoteSeat(state);
   const active = state.players[state.currentPlayerIndex];
   if (seat === null) return `Spectateur : tour de ${active.name}`;
@@ -346,6 +358,7 @@ function showHomeScreen() {
     createElement('p', { textContent: 'Deux joueurs, un même écran, une partie complète sans serveur.' }),
     createElement('div', { className: 'phase-actions' }, [
       createElement('button', { className: 'primary', onclick: () => promptNewGame() }, ['Nouvelle partie locale']),
+      createElement('button', { onclick: () => startSoloLocalGame() }, ['Solo contre l’ordi']),
       createElement('button', { onclick: () => loadLocalGame() }, ['Charger sauvegarde'])
     ])
   ]);
@@ -398,6 +411,14 @@ function promptNewGame() {
   const name2 = prompt('Nom du joueur 2 ?', 'Joueur Orange')?.trim() || 'Joueur Orange';
   resetCounterAnimations();
   newGame(name1, name2);
+  renderGameScreen();
+}
+
+function startSoloLocalGame() {
+  stopRemotePolling();
+  const name = prompt('Nom du joueur humain ?', 'Joueur Cyan')?.trim() || 'Joueur Cyan';
+  resetCounterAnimations();
+  startSoloGame(name, 'Ordinateur');
   renderGameScreen();
 }
 
@@ -509,13 +530,14 @@ function renderGameScreen() {
   prepareCounterDeltas(state);
   if (isRemoteState(state)) lastRemoteSignature = remoteSignature(state);
   const remoteMode = isRemoteState(state);
+  const remoteBoardLayout = usesRemoteBoardLayout(state);
   app.innerHTML = '';
-  app.className = `app game-screen phase-${phaseClass(state.phase)}${remoteMode ? ' remote-game' : ''}`;
+  app.className = `app game-screen phase-${phaseClass(state.phase)}${remoteBoardLayout ? ' remote-game' : ''}`;
   const currentPlayer = state.players[state.currentPlayerIndex];
   const remoteInfo = remoteSeatText(state);
   const headerStatus = state.winner !== null
     ? 'Partie terminée'
-    : `Joueur actif : ${currentPlayer.name}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
+    : `Joueur actif : ${currentPlayer.name}${currentPlayer.isBot ? ' (ordinateur)' : ''}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
   const headerActions = remoteMode
     ? [
       createElement('button', { onclick: () => showHomeScreen() }, ['Accueil']),
@@ -540,7 +562,7 @@ function renderGameScreen() {
     createElement('div', { className: 'header-actions' }, headerActions)
   ]);
 
-  const board = remoteMode
+  const board = remoteBoardLayout
     ? renderRemoteBoard(state)
     : createElement('div', { className: 'grid-3 game-board' }, [
       renderPlayerPanel(state.players[0]),
@@ -549,10 +571,38 @@ function renderGameScreen() {
     ]);
 
   app.append(header, board);
-  if (!remoteMode) app.append(renderHelpPanel());
+  if (!remoteBoardLayout) app.append(renderHelpPanel());
   lastCounterSnapshot = buildCounterSnapshot(state);
   counterDeltas = new Map();
   maybeOpenPendingDeckEffect();
+  scheduleBotTurn();
+}
+
+function scheduleBotTurn() {
+  const state = getState();
+  if (!state?.soloMode || state.winner !== null || isRemoteState(state)) return;
+  const current = state.players[state.currentPlayerIndex];
+  if (!current?.isBot || botThinking) return;
+  botThinking = true;
+  window.setTimeout(() => {
+    try {
+      runBotTurn(current.index);
+    } finally {
+      botThinking = false;
+      renderGameScreen();
+    }
+  }, 520);
+}
+
+function triggerBotReaction() {
+  const state = getState();
+  if (!state?.soloMode || botThinking || isRemoteState(state)) return false;
+  const changed = maybeReactToHumanAction(state.botIndex);
+  if (changed) {
+    renderGameScreen();
+    spawnArcadeEffect('hit', 'INT');
+  }
+  return changed;
 }
 
 function renderRemoteBoard(state) {
@@ -603,7 +653,7 @@ function renderRemoteLocalConsole(player) {
   const state = getState();
   const brokenCount = player.active.filter((fn) => fn.broken).length;
   const seat = getRemoteSeat(state);
-  const label = seat === null ? 'Spectateur' : 'Votre camp';
+  const label = state?.soloMode ? 'Votre camp' : seat === null ? 'Spectateur' : 'Votre camp';
   const tone = player.index === 0 ? 'cyan' : 'orange';
   return createElement('section', { className: `panel remote-local-console player-${tone}` }, [
     createElement('div', { className: 'panel-body' }, [
@@ -1091,6 +1141,7 @@ function renderCenterPanel(state) {
       const changed = validateUpdatePhase();
       noteRemoteLocalAction(changed);
       renderGameScreen();
+      if (changed) triggerBotReaction();
       if (changed) spawnArcadeEffect('draw', 'NEXT');
     },
     disabled: !canUseTurnControls || state.phase !== PHASES.UPDATE || pendingUpdates > 0 || state.winner !== null
@@ -1109,6 +1160,7 @@ function renderCenterPanel(state) {
       const ended = endTurn();
       noteRemoteLocalAction(ended);
       renderGameScreen();
+      if (ended) triggerBotReaction();
       if (ended) spawnArcadeEffect('draw', 'TURN');
     },
     disabled: !canUseTurnControls || !canEndTurn()
@@ -1120,6 +1172,7 @@ function renderCenterPanel(state) {
       const rebooted = rebootCurrentPlayer();
       noteRemoteLocalAction(rebooted);
       renderGameScreen();
+      if (rebooted) triggerBotReaction();
       if (rebooted) spawnArcadeEffect('reboot', 'REBOOT');
     },
     disabled: !canUseTurnControls || !canRebootCurrentPlayer()
@@ -1130,7 +1183,7 @@ function renderCenterPanel(state) {
     createElement('p', { textContent: `${state.players[state.winner].name} remporte la partie.` })
   ]) : null;
 
-  return createElement('section', { className: `panel panel-body phase-card${isRemoteState(state) ? ' remote-phase-card' : ''}` }, [
+  return createElement('section', { className: `panel panel-body phase-card${usesRemoteBoardLayout(state) ? ' remote-phase-card' : ''}` }, [
     createElement('h2', { className: 'phase-title-row' }, [
       createElement('span', { textContent: 'État du tour' }),
       createElement('span', { className: `phase-current phase-current-${phaseClass(state.phase)}`, textContent: phaseText })
@@ -1235,6 +1288,7 @@ function previewPhaseDraw() {
     const card = drawForPlayer('system');
     noteRemoteLocalAction(true);
     renderGameScreen();
+    triggerBotReaction();
     if (card) spawnArcadeEffect('draw', 'DRAW');
     return;
   }
@@ -1281,6 +1335,7 @@ function showCardDecisionModal({ title, player, deckType, cards, allowTake, allo
         const card = drawForPlayer(deckType);
         noteRemoteLocalAction(true);
         renderGameScreen();
+        triggerBotReaction();
         if (card) spawnArcadeEffect('draw', 'DRAW');
       }
     });
@@ -1311,6 +1366,7 @@ function applyUpdate(functionId) {
   const updated = updateFunction(functionId);
   noteRemoteLocalAction(updated);
   renderGameScreen();
+  if (updated) triggerBotReaction();
   if (!updated || !beforeOwner || !before) return;
   const afterOwner = getState().players.find((player) => player.index === beforeOwner.index);
   const after = afterOwner?.active.find((fn) => fn.id === functionId);
@@ -1393,6 +1449,7 @@ function showPendingDeckResolution(effect, targetPlayerIndex, deckType) {
     noteRemoteLocalAction(resolved);
     hideModal();
     renderGameScreen();
+    if (resolved) triggerBotReaction();
     if (resolved && current.mode === 'reveal_take') spawnArcadeEffect('draw', 'TAKE');
   };
 
@@ -1434,6 +1491,7 @@ function applyOverclock(functionId) {
   const used = useOverclock(functionId);
   noteRemoteLocalAction(used);
   renderGameScreen();
+  if (used) triggerBotReaction();
   if (used) spawnArcadeEffect('overclock', '2X');
 }
 
@@ -1455,6 +1513,7 @@ async function playCardAction(playerIndex, cardId) {
   const played = playCard(playerIndex, cardId, targetData);
   noteRemoteLocalAction(played);
   renderGameScreen();
+  if (played) triggerBotReaction();
   if (played) spawnCardEffect(card);
 }
 

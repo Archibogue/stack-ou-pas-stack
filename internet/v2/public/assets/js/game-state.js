@@ -15,6 +15,7 @@ export function createPlayer(name, index) {
   return {
     name,
     index,
+    isBot: false,
     score: 0,
     completed: [],
     memTotal: START_MEMORY,
@@ -49,6 +50,8 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     undoStack: [],
     pendingDeckEffect: null,
     firstTurn: true,
+    soloMode: false,
+    botIndex: null,
     remoteCode: null,
     isRemote: false,
     apiAvailable: false
@@ -107,7 +110,10 @@ export function restoreState(data) {
   state.logSequence = state.logSequence || state.log.length || 0;
   state.undoStack = [];
   state.pendingDeckEffect = state.pendingDeckEffect || null;
+  state.soloMode = Boolean(state.soloMode);
+  state.botIndex = Number.isInteger(state.botIndex) ? state.botIndex : null;
   state.players?.forEach((player) => {
+    player.isBot = Boolean(player.isBot);
     player.updatedThisTurn = player.updatedThisTurn || [];
     player.planifierUsed = Boolean(player.planifierUsed);
     player.overclockTarget = player.overclockTarget || null;

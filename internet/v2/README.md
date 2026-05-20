@@ -6,6 +6,7 @@ Version web V2 hébergeable pour le jeu d’initiation quadratique.
 
 - Séparer clairement le moteur, les données, l’interface et la persistance.
 - Créer une version jouable en mode local/hot-seat.
+- Ajouter un mode solo local contre l'ordinateur, jouable sans serveur.
 - Ajouter une couche API PHP optionnelle pour hébergement mutualisé PHP/MySQL.
 - Garder une architecture simple sans framework lourd.
 
@@ -23,7 +24,7 @@ Version web V2 hébergeable pour le jeu d’initiation quadratique.
 
 1. Ouvrir `internet/v2/public/index.html` dans un navigateur moderne.
 2. Créer une partie locale depuis l’écran d’accueil.
-3. Jouer en hot-seat entre deux joueurs.
+3. Jouer en hot-seat entre deux joueurs, ou lancer `Solo contre l'ordi`.
 4. Utiliser les boutons `Exporter` / `Importer` pour sauvegarder et restaurer une partie JSON.
 
 Pour tester avec les modules JavaScript dans des conditions proches du déploiement :
@@ -44,6 +45,12 @@ node internet/v2/tests/engine.test.mjs
 
 Ils vérifient les constantes de règles, la composition du deck par rapport au Markdown physique, la main de départ, la pioche Système, le remplacement automatique des Fonctions terminées, le cycle mémoire des fonctions, le Planificateur local, Hotfix et le reboot volontaire.
 
+## Mode solo contre l'ordi
+
+Le bouton `Solo contre l'ordi` lance une partie locale avec Joueur 1 humain et Joueur 2 ordinateur. Le bot fonctionne entièrement dans le navigateur, sans API PHP/MySQL, et joue ses coups avec les fonctions publiques du moteur.
+
+Limites connues : le bot est heuristique, pas optimal. Il sert surtout d'adversaire pédagogique et de test rapide pour enchaîner les phases, observer les cartes et vérifier une partie sans second joueur.
+
 ## Tester avec API PHP/MySQL
 
 L’API PHP/MySQL est optionnelle et pensée pour un usage pédagogique / prototype. La V2 reste jouable sans serveur de base de données grâce à la sauvegarde locale et à l’export/import JSON.
@@ -60,6 +67,7 @@ Ne versionnez jamais `internet/v2/public/api/config.php` : ce fichier contient l
 ## Checklist manuelle
 
 - Démarrer une partie locale.
+- Démarrer une partie solo et vérifier que l'ordinateur joue automatiquement son tour.
 - Respecter l’ordre des phases : mise à jour → pioche → conception → fin de tour.
 - Vérifier que la pioche de tour tire une carte Système, pas une nouvelle Fonction.
 - Lancer une fonction et atteindre [0].
