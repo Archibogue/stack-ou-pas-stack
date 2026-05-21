@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Stack ou pas Stack - Règles initiation quadratique</title>
+  <style>
+    @page { size: A4 portrait; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #1f261f;
+      background: #ffffff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10.6pt;
+      line-height: 1.34;
+    }
+    h1 {
+      margin: 0 0 8mm;
+      color: #10201e;
+      font-size: 22pt;
+      line-height: 1.05;
+    }
+    h2 {
+      margin: 8mm 0 3mm;
+      color: #17433e;
+      font-size: 15pt;
+      break-after: avoid;
+    }
+    h3 {
+      margin: 5mm 0 2mm;
+      color: #2f514d;
+      font-size: 12pt;
+      break-after: avoid;
+    }
+    p, ul, ol {
+      margin: 0 0 3mm;
+    }
+    ul, ol {
+      padding-left: 6mm;
+    }
+    li {
+      margin: 0 0 1.4mm;
+    }
+    code {
+      font-family: Consolas, monospace;
+      background: #eef4f2;
+      padding: .2mm 1mm;
+      border-radius: 1mm;
+    }
+    strong {
+      color: #122f2b;
+    }
+  </style>
+</head>
+<body>
+<h1>Stack ou pas Stack — Règles d’initiation quadratique</h1>
+<p>Version physique d’initiation, issue de Neon Stack V5.4 mais accélérée pour des parties courtes.</p>
+<h2>Paramètres de partie</h2>
+<ul>
+<li><strong>Mémoire de départ</strong> : 11 mémoire totale / 11 mémoire libre.</li>
+<li><strong>Condition de victoire</strong> : 11 points ou plus.</li>
+<li><strong>Condition qualitative</strong> : au moins 3 fonctions terminées, avec au moins 2 noms de fonctions différents.</li>
+<li><strong>Limite de pile</strong> : une fonction casse si elle devrait recevoir un 7e cadre.</li>
+<li><strong>Bonus de récursion</strong> : <code>B(R)=R²</code>.</li>
+<li><strong>Decks</strong> : deux decks d’initiation symétriques de 26 cartes.</li>
+</ul>
+<h2>Mise en place</h2>
+<p>Chaque joueur sépare son deck en deux piles :</p>
+<ol>
+<li><strong>Pile Fonctions</strong> : uniquement les cartes Fonction.</li>
+<li><strong>Pile Système</strong> : Commandes, Interrupts et Hardware.</li>
+</ol>
+<p>Chaque joueur pioche 5 cartes au total. Répartition conseillée :</p>
+<ul>
+<li>3 cartes depuis la pile Fonctions ;</li>
+<li>2 cartes depuis la pile Système.</li>
+</ul>
+<p>Le premier joueur ne pioche pas au premier tour.</p>
+<h2>Ordre obligatoire d’un tour</h2>
+<p>Au tout début de son tour, le joueur peut effectuer un reboot volontaire s’il n’a encore fait aucune autre action ce tour-ci.</p>
+<p>S’il ne reboote pas, chaque tour suit ensuite obligatoirement cet ordre :</p>
+<ol>
+<li><strong>Phase de mise à jour</strong> : toutes les fonctions actives non cassées du joueur actif sont mises à jour, dans l’ordre choisi par ce joueur.</li>
+<li><strong>Phase de pioche</strong> : le joueur pioche 1 carte dans la pile Système.</li>
+<li><strong>Phase de conception</strong> : le joueur peut jouer des Fonctions, Commandes et Hardware.</li>
+<li><strong>Fin de tour</strong> : les effets temporaires cessent.</li>
+</ol>
+<p>Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts. Une Interrupt peut être jouée pendant le tour adverse quand sa condition de réaction est explicitement remplie et qu’une cible légale existe.</p>
+<p>La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.</p>
+<h2>Fonctionnement des fonctions</h2>
+<p>Quand une fonction est lancée, son contrôleur choisit sa profondeur <code>R</code> si la carte indique « Empiler jusqu’à X ». Pour une carte « Empiler X », <code>R=X</code>.</p>
+<p>La fonction place d’abord son cadre initial <code>[R]</code>. À chaque phase de mise à jour :</p>
+<ul>
+<li>si elle n’a pas encore atteint <code>[0]</code>, elle empile le cadre suivant ;</li>
+<li>si elle a déjà atteint <code>[0]</code>, elle dépile le cadre du sommet.</li>
+</ul>
+<p>Le joueur ne choisit pas entre empiler ou dépiler. L’état de la fonction le détermine.</p>
+<h2>Cas de base, remontée, terminaison</h2>
+<ul>
+<li>Le cadre <code>[0]</code> déclenche le <strong>cas de base</strong>.</li>
+<li>Les cadres supérieurs à <code>[0]</code> déclenchent la <strong>remontée</strong>.</li>
+<li>La fonction se termine seulement quand son cadre initial est dépilé et que sa pile devient vide.</li>
+</ul>
+<p>Quand une fonction se termine :</p>
+<ol>
+<li>elle rapporte ses points de base ;</li>
+<li>elle ajoute le bonus <code>B(R)=R²</code> ;</li>
+<li>elle applique son effet de terminaison ;</li>
+<li>elle libère sa mémoire ;</li>
+<li>elle va en défausse ;</li>
+<li>son contrôleur pioche automatiquement 1 nouvelle carte Fonction, si possible.</li>
+</ol>
+<h2>Bonus quadratique</h2>
+<p>| R | 0 | 1 | 2 | 3 | 4 | 5 |</p>
+<p>|---|---|---|---|---|---|---|</p>
+<p>| B(R)=R² | 0 | 1 | 4 | 9 | 16 | 25 |</p>
+<h2>Fonctions cassées</h2>
+<p>Une fonction casse si :</p>
+<ul>
+<li>elle doit empiler mais son contrôleur ne peut pas payer la mémoire ;</li>
+<li>elle devrait recevoir un 7e cadre ;</li>
+<li>un effet de carte la casse explicitement.</li>
+</ul>
+<p>Une fonction cassée reste en jeu, continue d’occuper sa mémoire et ne rapporte aucun point tant qu’elle n’est pas nettoyée ou réparée.</p>
+<h2>Cadres parasites</h2>
+<p>Un cadre parasite :</p>
+<ul>
+<li>compte dans la taille de la pile ;</li>
+<li>doit être dépilé normalement ;</li>
+<li>ne produit aucun effet ;</li>
+<li>ne libère pas de mémoire ;</li>
+<li>ne modifie jamais <code>R</code>.</li>
+</ul>
+<p>Un parasite ajouté avant <code>[0]</code> ne bloque pas la descente : la fonction continue jusqu’au cas de base, puis les parasites seront dépilés pendant la remontée.</p>
+<h2>Stack Spike</h2>
+<p><strong>Stack Spike</strong> se joue sur une fonction de ton choix contenant exactement <strong>4 ou 5 cadres</strong>, à toi ou à l’adversaire. Elle ajoute 2 cadres parasites. Si cela devait créer un 7e cadre, la fonction casse immédiatement.</p>
+<p><strong>Injection de Boucle</strong> se joue sur une fonction de ton choix, à toi ou à l’adversaire. Le contrôleur de cette fonction doit payer 1 mémoire libre ; sinon, elle casse.</p>
+<p><strong>Overclocking</strong> se déclenche à la fin de la phase de mise à jour, après toutes les mises à jour obligatoires et avant la pioche. Le joueur peut l’utiliser une fois par tour ou le passer explicitement.</p>
+<p><strong>Swap Brutal</strong> regarde toute la durée du tour : une fonction terminée pendant la phase de mise à jour de ce même tour évite sa pénalité de fin de tour.</p>
+<h2>Reboot</h2>
+<p>Au début de son tour, avant toute autre action du tour, un joueur peut effectuer un reboot volontaire. S’il a déjà mis à jour une fonction, pioché ou joué une carte ce tour-ci, il ne peut plus rebooter volontairement.</p>
+<p>Le reboot volontaire remplace toutes ses autres actions du tour :</p>
+<ul>
+<li>il défausse ses fonctions actives ;</li>
+<li>il retire les piles associées sans effet ;</li>
+<li>il libère la mémoire occupée par les fonctions ;</li>
+<li>il défausse sa main ;</li>
+<li>il remélange sa défausse dans les deux piles selon le type des cartes ;</li>
+<li>il repioche une main de départ si possible : 3 cartes Fonctions et 2 cartes Système.</li>
+</ul>
+</body>
+</html>

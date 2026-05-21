@@ -1,5 +1,14 @@
 # Changelog
 
+## Kit physique initiation quadratique — textes clarifiés
+
+- Clarification des pioches qui prennent explicitement une carte Système.
+- Clarification de Swap Brutal et des terminaisons comptées pendant la phase de mise à jour du même tour.
+- Modification d’Overclocking : choix en fin de phase de mise à jour, après les mises à jour obligatoires et avant la pioche.
+- Clarification des cibles à soi ou adverses pour Routine Sentinelle, Archiviste du Cache, Stack Spike et Injection de Boucle.
+- Correction du texte de Débogueur pas à pas.
+- Alignement des textes web, Markdown physique, règles, planches imprimables, PDF et ZIP du kit physique.
+
 ## V2 solo RC
 
 - Ajout du mode solo local contre l'ordinateur dans la V2 web.

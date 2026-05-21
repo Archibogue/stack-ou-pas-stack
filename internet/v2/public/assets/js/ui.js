@@ -1,5 +1,5 @@
 import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, canSkipOverclock, skipOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { getBotProfileLabel, maybeReactToHumanAction, runBotStep, startSoloGame } from './bot.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
@@ -1292,8 +1292,9 @@ function renderCenterPanel(state) {
   const currentPlayer = getState().players[state.currentPlayerIndex];
   const canUseTurnControls = canControlCurrentTurn(state);
   const pendingUpdates = currentPlayer.active.filter((fn) => !fn.broken && !currentPlayer.updatedThisTurn.includes(fn.id)).length;
+  const overclockDecision = canUseTurnControls && canSkipOverclock();
   const phaseText = state.phase === PHASES.UPDATE
-    ? pendingUpdates > 0 ? `Phase de mise à jour : ${pendingUpdates} fonction(s) restantes` : 'Mise à jour terminée'
+    ? pendingUpdates > 0 ? `Phase de mise à jour : ${pendingUpdates} fonction(s) restantes` : overclockDecision ? 'Overclocking disponible' : 'Mise à jour terminée'
     : state.phase === PHASES.DRAW
       ? 'Phase de pioche : carte Système uniquement' : state.phase === PHASES.ACTION ? 'Phase de conception' : 'Partie terminée';
   const buttons = [];
@@ -1309,8 +1310,31 @@ function renderCenterPanel(state) {
       if (changed) triggerBotReaction();
       if (changed) spawnArcadeEffect('draw', 'NEXT');
     },
-    disabled: !canUseTurnControls || state.phase !== PHASES.UPDATE || pendingUpdates > 0 || state.winner !== null
+    disabled: !canUseTurnControls || state.phase !== PHASES.UPDATE || pendingUpdates > 0 || overclockDecision || state.winner !== null
   }, ['Valider mise à jour']));
+
+  buttons.push(createElement('button', {
+    onclick: async () => {
+      const choices = currentPlayer.active
+        .filter((fn) => canUseOverclock(fn.id))
+        .map((fn) => ({ id: fn.id, playerIndex: currentPlayer.index, functionId: fn.id, label: fn.name }));
+      const selected = await chooseTargetFunction('Utiliser Overclocking', choices);
+      if (selected) applyOverclock(selected);
+    },
+    disabled: !overclockDecision
+  }, ['Utiliser Overclocking']));
+
+  buttons.push(createElement('button', {
+    onclick: () => {
+      const beforeSequence = getState().logSequence || 0;
+      const skipped = skipOverclock();
+      noteRemoteLocalAction(skipped);
+      renderGameScreen();
+      if (skipped) showActionToast(actionLabelFromLogs(beforeSequence, `${currentPlayer.name} passe Overclocking.`), { actor: 'human' });
+      if (skipped) spawnArcadeEffect('draw', 'SKIP');
+    },
+    disabled: !overclockDecision
+  }, ['Passer Overclocking']));
 
   buttons.push(createElement('button', {
     onclick: () => {
@@ -1687,6 +1711,10 @@ async function playCardAction(playerIndex, cardId) {
     targetData.R = await askForR(card);
     if (targetData.R === null) return;
   }
+  if (card.type === 'Hardware' && player.hardware.length >= 2) {
+    targetData.replaceHardwareId = await chooseHardwareToReplace(player, card);
+    if (!targetData.replaceHardwareId) return;
+  }
   const targetChoices = getTargetChoices(playerIndex, card);
   if (targetChoices) {
     const selected = await chooseTargetFunction(`Choisir une fonction pour ${card.name}`, targetChoices);
@@ -1779,6 +1807,18 @@ function askForR(card) {
       onclick: () => { hideModal(); resolve(null); }
     }, ['Annuler']));
     showModal(`Profondeur pour ${card.name}`, createElement('div', { className: 'modal-choice' }, options), []);
+  });
+}
+
+function chooseHardwareToReplace(player, card) {
+  return new Promise((resolve) => {
+    const choices = player.hardware.map((hardware) => createElement('button', {
+      onclick: () => { hideModal(); resolve(hardware.id); }
+    }, [`Défausser ${hardware.name}`]));
+    choices.push(createElement('button', {
+      onclick: () => { hideModal(); resolve(null); }
+    }, ['Annuler']));
+    showModal(`Remplacer un Hardware pour ${card.name}`, createElement('div', { className: 'modal-choice' }, choices), []);
   });
 }
 

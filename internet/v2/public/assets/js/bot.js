@@ -14,6 +14,7 @@ import {
   playCard,
   rebootCurrentPlayer,
   resolvePendingDeckEffect,
+  skipOverclock,
   updateFunction,
   useOverclock,
   validateUpdatePhase
@@ -48,6 +49,7 @@ export function getBotProfileLabel(profile = getState()?.botProfile) {
 export function runBotStep(botIndex = getState()?.botIndex) {
   const state = getState();
   if (!state || state.winner !== null || botIndex === null || state.currentPlayerIndex !== botIndex) return false;
+  const profile = normalizeBotProfile(state.botProfile);
 
   const effect = getPendingDeckEffect();
   if (effect && effect.ownerIndex !== botIndex) return false;
@@ -62,6 +64,9 @@ export function runBotStep(botIndex = getState()?.botIndex) {
   if (state.phase === PHASES.UPDATE) {
     const pending = getPendingUpdates(state.players[botIndex]);
     if (pending.length === 0) {
+      const overclockTarget = chooseOverclockTarget(profile);
+      if (overclockTarget) return executeBotAction(botIndex, { kind: 'overclock', target: overclockTarget });
+      if (skipOverclock()) return true;
       explainBot({ kind: 'validateUpdate' });
       return validateUpdatePhase();
     }
@@ -154,9 +159,6 @@ function chooseAction(botIndex) {
 
   const overclock = findPlayableCard(bot, 'overclock');
   if (overclock && bot.active.some((fn) => !fn.broken && fn.reachedZero)) return { kind: 'card', card: overclock, reason: 'une fonction prête à dépiler peut profiter du tempo' };
-
-  const overclockTarget = chooseOverclockTarget();
-  if (overclockTarget) return { kind: 'overclock', target: overclockTarget };
 
   if (profile !== 'pedagogique' || getState().turn >= 4) {
     const pressure = choosePressureAction(botIndex, profile, false);
@@ -280,12 +282,22 @@ function chooseDepth(player, card, profile = normalizeBotProfile(getState()?.bot
   return Math.min(card.maxR, Math.max(2, player.memFree - card.cost - 2));
 }
 
-function chooseOverclockTarget() {
+function chooseOverclockTarget(profile = normalizeBotProfile(getState()?.botProfile)) {
   const state = getState();
   const player = state.players[state.currentPlayerIndex];
   return player.active
     .filter((fn) => !fn.broken && canUseOverclock(fn.id))
-    .sort((a, b) => Number(b.reachedZero) - Number(a.reachedZero) || a.frames.length - b.frames.length)[0] || null;
+    .filter((fn) => {
+      if (willCompleteOnNextUpdate(fn)) return true;
+      if (profile === 'pedagogique') return false;
+      if (profile === 'agressif') return player.memFree > 1 || fn.reachedZero;
+      return false;
+    })
+    .sort((a, b) => Number(willCompleteOnNextUpdate(b)) - Number(willCompleteOnNextUpdate(a)) || Number(b.reachedZero) - Number(a.reachedZero) || a.frames.length - b.frames.length)[0] || null;
+}
+
+function willCompleteOnNextUpdate(fn) {
+  return fn.reachedZero && fn.frames.length === 1;
 }
 
 function findPlayableCard(player, key) {

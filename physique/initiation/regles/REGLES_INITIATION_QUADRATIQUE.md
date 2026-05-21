@@ -96,7 +96,13 @@ Un parasite ajouté avant `[0]` ne bloque pas la descente : la fonction continue
 
 ## Stack Spike
 
-**Stack Spike** se joue sur une fonction contenant exactement **4 ou 5 cadres**. Elle ajoute 2 cadres parasites. Si cela devait créer un 7e cadre, la fonction casse immédiatement.
+**Stack Spike** se joue sur une fonction de ton choix contenant exactement **4 ou 5 cadres**, à toi ou à l’adversaire. Elle ajoute 2 cadres parasites. Si cela devait créer un 7e cadre, la fonction casse immédiatement.
+
+**Injection de Boucle** se joue sur une fonction de ton choix, à toi ou à l’adversaire. Le contrôleur de cette fonction doit payer 1 mémoire libre ; sinon, elle casse.
+
+**Overclocking** se déclenche à la fin de la phase de mise à jour, après toutes les mises à jour obligatoires et avant la pioche. Le joueur peut l’utiliser une fois par tour ou le passer explicitement.
+
+**Swap Brutal** regarde toute la durée du tour : une fonction terminée pendant la phase de mise à jour de ce même tour évite sa pénalité de fin de tour.
 
 ## Reboot
 

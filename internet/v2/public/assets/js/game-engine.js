@@ -114,6 +114,7 @@ export function beginTurn() {
   player.planifierUsed = false;
   player.overclockTarget = null;
   player.overclockUsed = false;
+  player.overclockSkipped = false;
   player.rebootedThisTurn = false;
   player.turnActionsTaken = false;
   player.completedThisTurn = false;
@@ -142,12 +143,12 @@ export function getFunctionEffectSummary(func) {
   };
   const summaries = {
     factorielle: {
-      base: 'pioche 1 carte',
+      base: 'pioche 1 carte Système',
       up: 'gagne 1 mémoire libre',
       terminal: `gagne B(${func.R})=${bonus} mémoire libre`
     },
     tri_fusion: {
-      base: 'pioche 1 carte',
+      base: 'pioche 1 carte Système',
       up: 'regarde les 2 cartes du dessus d’une de tes pioches ; tu peux mettre l’une d’elles sous la pile',
       terminal: `retire jusqu’à B(${func.R})=${bonus} parasite(s)`
     },
@@ -157,34 +158,34 @@ export function getFunctionEffectSummary(func) {
       terminal: `révèle B(${func.R})+1=${bonus + 1} cartes du dessus d’une de tes pioches, prends-en 1 en main, puis remets les autres sous la pile`
     },
     sentinelle: {
-      base: 'regarde la carte du dessus d’une pioche et la laisse au-dessus',
+      base: 'regarde la carte du dessus d’une pioche de ton choix, à toi ou adverse, et la laisse au-dessus',
       up: 'gagne 1 mémoire libre',
-      terminal: `pioche B(${func.R})=${bonus} carte(s)`
+      terminal: `pioche B(${func.R})=${bonus} carte(s) Système`
     },
     glouton: {
-      base: 'pioche 1 carte',
+      base: 'pioche 1 carte Système',
       up: 'l’adversaire perd 1 mémoire libre',
       terminal: `ajoute B(${func.R})=${bonus} parasite(s) chez l’adversaire`
     },
     archiviste: {
-      base: 'regarde les 2 cartes du dessus d’une pioche, puis les remet au-dessus dans l’ordre de son choix',
+      base: 'regarde les 2 cartes du dessus d’une pioche de ton choix, à toi ou adverse, puis les remet au-dessus dans l’ordre de son choix',
       up: 'gagne 1 mémoire libre',
-      terminal: `pioche B(${func.R})=${bonus} carte(s), puis défausse 1 carte`
+      terminal: `pioche B(${func.R})=${bonus} carte(s) Système, puis défausse 1 carte`
     },
     quicksort: {
-      base: 'pioche 1 carte',
+      base: 'pioche 1 carte Système',
       up: 'l’adversaire perd 1 mémoire libre',
       terminal: `l’adversaire perd B(${func.R})=${bonus} mémoire libre`
     },
     expansion: {
-      base: 'pioche 1 carte',
+      base: 'pioche 1 carte Système',
       up: 'gagne 1 mémoire libre',
       terminal: `gagne B(${func.R})=${bonus} mémoire libre`
     },
     compactage: {
       base: 'gagne 1 mémoire libre',
       up: 'gagne 1 mémoire libre',
-      terminal: `nettoie une fonction cassée${bonus >= 2 ? ' puis pioche 1 carte' : ''}`
+      terminal: `nettoie une fonction cassée si possible${bonus >= 2 ? ', puis pioche 1 carte Système même si rien n’a été nettoyé' : ''}`
     }
   };
   return summaries[func.cardKey] || fallback;
@@ -449,10 +450,16 @@ export function validateUpdatePhase() {
   const player = getCurrentPlayer();
   const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
   if (pending.length > 0) return false;
+  if (mustChooseOverclock(player)) return false;
   createUndoPoint();
   advanceAfterUpdatePhase();
   persistGameState();
   return true;
+}
+
+function mustChooseOverclock(player = getCurrentPlayer()) {
+  if (!hasHardware(player, 'overclock') || player.overclockUsed || player.overclockSkipped) return false;
+  return player.active.some((fn) => !fn.broken);
 }
 
 function advanceAfterUpdatePhase() {
@@ -816,8 +823,12 @@ function breakFunction(player, func, reason) {
 
 export function canUseOverclock(functionId) {
   if (!gameState || gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect) return false;
   const player = getCurrentPlayer();
   if (!hasHardware(player, 'overclock') || player.overclockUsed) return false;
+  if (player.overclockSkipped) return false;
+  const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
+  if (pending.length > 0) return false;
   return player.active.some((fn) => fn.id === functionId && !fn.broken);
 }
 
@@ -830,7 +841,31 @@ export function useOverclock(functionId) {
   logAction(gameState, `${player.name} active Overclocking.`, 'sys');
   const result = updateFunction(functionId, true, { skipUndo: true });
   if (!result) discardUndoPoint(undoPoint);
+  const stillActive = player.active.some((fn) => fn.id === functionId);
+  if (result && stillActive) {
+    loseMemory(player, 1);
+    logAction(gameState, `${player.name} perd 1 mémoire libre : la mise à jour Overclocking n’a pas terminé la fonction.`, 'bad');
+  }
+  persistGameState();
   return result;
+}
+
+export function canSkipOverclock() {
+  if (!gameState || gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect) return false;
+  const player = getCurrentPlayer();
+  const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
+  return pending.length === 0 && mustChooseOverclock(player);
+}
+
+export function skipOverclock() {
+  if (!canSkipOverclock()) return false;
+  const player = getCurrentPlayer();
+  createUndoPoint();
+  player.overclockSkipped = true;
+  logAction(gameState, `${player.name} passe Overclocking pour cette phase de mise à jour.`, 'sys');
+  persistGameState();
+  return true;
 }
 
 export function rebootCurrentPlayer() {
@@ -857,6 +892,7 @@ function rebootPlayer(player, forced = false) {
   player.planifierUsed = false;
   player.overclockTarget = null;
   player.overclockUsed = false;
+  player.overclockSkipped = false;
   player.swapActive = false;
   player.tempMemory = 0;
   player.completedThisTurn = false;
@@ -897,10 +933,6 @@ export function endTurn() {
       logAction(gameState, `${expired} mémoire temporaire de ${player.name} disparaît.`, 'sys');
     }
   }
-  if (player.overclockTarget && player.active.some((fn) => fn.id === player.overclockTarget)) {
-    loseMemory(player, 1);
-    logAction(gameState, `${player.name} perd 1 mémoire libre : la fonction overclockée n’a pas terminé.`, 'bad');
-  }
   if (player.swapActive && !player.completedThisTurn) {
     player.memTotal = Math.max(0, player.memTotal - 1);
     clampMemory(player);
@@ -909,6 +941,7 @@ export function endTurn() {
   player.swapActive = false;
   player.overclockTarget = null;
   player.overclockUsed = false;
+  player.overclockSkipped = false;
   player.rebootedThisTurn = false;
   player.turnActionsTaken = false;
   player.completedThisTurn = false;
@@ -968,11 +1001,20 @@ function playFunctionCard(player, card, R) {
 }
 
 function playHardwareCard(player, card, targetData) {
+  let replaced = null;
   if (player.hardware.length >= 2) {
-    logAction(gameState, `${player.name} a déjà 2 Hardware en jeu.`, 'warn');
-    return false;
+    if (!targetData.replaceHardwareId) {
+      logAction(gameState, `${player.name} a déjà 2 Hardware en jeu : choisis un Hardware à défausser pour le remplacer.`, 'warn');
+      return false;
+    }
+    replaced = player.hardware.find((item) => item.id === targetData.replaceHardwareId);
+    if (!replaced) {
+      logAction(gameState, `Hardware à remplacer invalide.`, 'warn');
+      return false;
+    }
   }
   if (!payMemory(player, card.cost)) return false;
+  if (replaced) removeHardware(player, replaced);
   player.hardware.push(card);
   removeCardFromHand(player, card.id);
   switch (card.key) {
@@ -988,7 +1030,28 @@ function playHardwareCard(player, card, targetData) {
       logAction(gameState, `${player.name} installe ${card.name}.`, 'sys');
       break;
   }
+  if (getPlayerUsedMemory(player) > player.memTotal) {
+    rebootPlayer(player, true);
+  }
   return true;
+}
+
+function removeHardware(player, card) {
+  player.hardware = player.hardware.filter((item) => item.id !== card.id);
+  player.discard.push(card);
+  if (card.key === 'ram') {
+    player.memTotal = Math.max(0, player.memTotal - 4);
+    clampMemory(player);
+  }
+  if (card.key === 'overclock') {
+    player.overclockTarget = null;
+    player.overclockUsed = false;
+    player.overclockSkipped = false;
+  }
+  if (card.key === 'planificateur') {
+    player.planifierUsed = false;
+  }
+  logAction(gameState, `${player.name} défausse ${card.name} pour libérer un emplacement Hardware.`, 'sys');
 }
 
 function playSystemCard(player, card, targetData) {
@@ -1161,7 +1224,7 @@ function purgeTarget(player, functionId) {
   }
   if (removed === 0) {
     drawSystemCards(player, 1);
-    logAction(gameState, `Purge Contrôlée n’a rien retiré : ${player.name} pioche 1 carte.`, 'good');
+    logAction(gameState, `Purge Contrôlée n’a rien retiré : ${player.name} pioche 1 carte Système.`, 'good');
   } else {
     logAction(gameState, `${player.name} retire ${removed} parasite(s).`, 'good');
   }
@@ -1627,6 +1690,7 @@ export function loadDemoScenario(name) {
     player.planifierUsed = false;
     player.overclockTarget = null;
     player.overclockUsed = false;
+    player.overclockSkipped = false;
     player.swapActive = false;
     player.tempMemory = 0;
     player.rebootedThisTurn = false;

@@ -1,5 +1,13 @@
 # Changelog V2
 
+## Kit physique initiation quadratique — textes clarifiés
+
+- Textes des cartes V2 alignés avec le kit physique imprimable.
+- Pioches Système explicitées dans les cartes concernées.
+- Overclocking déplacé en fin de phase de mise à jour, avec choix `Utiliser Overclocking` / `Passer Overclocking`.
+- Clarification de Swap Brutal, Débogueur pas à pas et des cibles à soi ou adverses.
+- Régénération des planches PDF, de l’export PNG et du ZIP téléchargeable depuis la V2.
+
 ## V2 solo RC
 
 - Ajout du mode solo local contre l'ordinateur.

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CARD_DEFINITIONS, DECK_COMPOSITION } from '../../../internet/v2/public/assets/js/cards.js';
 
@@ -9,6 +10,9 @@ const repoRoot = resolve(__dirname, '../../..');
 const printDir = resolve(repoRoot, 'physique/initiation/impression');
 const sourceDir = resolve(printDir, 'sources');
 const downloadDir = resolve(repoRoot, 'internet/v2/public/assets/downloads');
+const pngZip = resolve(repoRoot, 'physique/initiation/cartes/stack_ou_pas_stack_cartes_png_quadratique.zip');
+const rulesMarkdown = resolve(repoRoot, 'physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md');
+const rulesPdf = resolve(printDir, 'stack_ou_pas_stack_regles_initiation_quadratique.pdf');
 
 const outputFiles = {
   J1: resolve(printDir, 'stack_ou_pas_stack_initiation_quadratique_J1_recto_verso.pdf'),
@@ -19,7 +23,8 @@ const outputFiles = {
 const htmlFiles = {
   J1: resolve(sourceDir, 'stack_ou_pas_stack_initiation_quadratique_J1_recto_verso.html'),
   J2: resolve(sourceDir, 'stack_ou_pas_stack_initiation_quadratique_J2_recto_verso.html'),
-  ALL: resolve(sourceDir, 'stack_ou_pas_stack_initiation_quadratique_planches_recto_verso.html')
+  ALL: resolve(sourceDir, 'stack_ou_pas_stack_initiation_quadratique_planches_recto_verso.html'),
+  RULES: resolve(sourceDir, 'stack_ou_pas_stack_regles_initiation_quadratique.html')
 };
 
 const kitZip = resolve(downloadDir, 'stack-ou-pas-stack-kit-impression-physique.zip');
@@ -42,16 +47,23 @@ const j2 = buildDeckHtml('J2', 'Joueur Orange', '#ffd166', cardOrder);
 writeFileSync(htmlFiles.J1, buildDocument('Stack ou pas Stack - J1', [j1]), 'utf8');
 writeFileSync(htmlFiles.J2, buildDocument('Stack ou pas Stack - J2', [j2]), 'utf8');
 writeFileSync(htmlFiles.ALL, buildDocument('Stack ou pas Stack - Planches', [j1, j2]), 'utf8');
+writeFileSync(htmlFiles.RULES, buildRulesDocument(readFileSync(rulesMarkdown, 'utf8')), 'utf8');
 
 for (const key of ['J1', 'J2', 'ALL']) {
   printPdf(htmlFiles[key], outputFiles[key]);
 }
+printPdf(htmlFiles.RULES, rulesPdf);
+
+writeCardPngZip(pngZip, [
+  { code: 'J1', label: 'Joueur Cyan', accent: '#4ecdc4', cards: cardOrder },
+  { code: 'J2', label: 'Joueur Orange', accent: '#ffd166', cards: cardOrder }
+]);
 
 writeZip(kitZip, [
   resolve(printDir, 'stack_ou_pas_stack_initiation_quadratique_planches_recto_verso.pdf'),
   resolve(printDir, 'stack_ou_pas_stack_initiation_quadratique_J1_recto_verso.pdf'),
   resolve(printDir, 'stack_ou_pas_stack_initiation_quadratique_J2_recto_verso.pdf'),
-  resolve(printDir, 'stack_ou_pas_stack_regles_initiation_quadratique.pdf'),
+  rulesPdf,
   resolve(printDir, 'plateau_compact_2xA4_v3b.pdf')
 ]);
 
@@ -59,6 +71,8 @@ console.log('Planches generees :');
 console.log(`- ${relative(outputFiles.J1)}`);
 console.log(`- ${relative(outputFiles.J2)}`);
 console.log(`- ${relative(outputFiles.ALL)}`);
+console.log(`- ${relative(rulesPdf)}`);
+console.log(`- ${relative(pngZip)}`);
 console.log(`- ${relative(kitZip)}`);
 
 function expandDeck() {
@@ -107,11 +121,12 @@ function renderPage({ code, label, accent, side, pageIndex, cards }) {
 
 function renderCardFace(playerCode, accent, card) {
   const typeClass = typeToClass(card.type);
+  const textClass = card.description.length > 260 ? 'text-xlong' : card.description.length > 190 ? 'text-long' : '';
   const rule = card.type === 'Fonction'
     ? `${card.mode === 'fixe' ? 'Empiler' : "Empiler jusqu'a"} ${card.maxR} - valeur ${card.value}`
     : `Cout ${card.cost}`;
   return `
-    <article class="card ${typeClass}" style="--accent:${accent}">
+    <article class="card ${typeClass} ${textClass}" style="--accent:${accent}">
       <header class="card-header">
         <span>${escapeHtml(card.type)}</span>
         <strong>Cout ${card.cost}</strong>
@@ -242,6 +257,21 @@ function buildDocument(title, bodies) {
       z-index: 1;
       overflow-wrap: anywhere;
     }
+    .text-long p {
+      font-size: 8.1pt;
+      line-height: 1.12;
+    }
+    .text-xlong p {
+      font-size: 7pt;
+      line-height: 1.08;
+    }
+    .text-xlong h2 {
+      font-size: 13.4pt;
+    }
+    .text-xlong .rule {
+      font-size: 8.4pt;
+      padding: 1.35mm;
+    }
     footer {
       margin-top: auto;
       color: rgba(247,242,233,.68);
@@ -311,6 +341,124 @@ ${bodies.join('\n')}
 </html>`;
 }
 
+function buildRulesDocument(markdown) {
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Stack ou pas Stack - Règles initiation quadratique</title>
+  <style>
+    @page { size: A4 portrait; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #1f261f;
+      background: #ffffff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10.6pt;
+      line-height: 1.34;
+    }
+    h1 {
+      margin: 0 0 8mm;
+      color: #10201e;
+      font-size: 22pt;
+      line-height: 1.05;
+    }
+    h2 {
+      margin: 8mm 0 3mm;
+      color: #17433e;
+      font-size: 15pt;
+      break-after: avoid;
+    }
+    h3 {
+      margin: 5mm 0 2mm;
+      color: #2f514d;
+      font-size: 12pt;
+      break-after: avoid;
+    }
+    p, ul, ol {
+      margin: 0 0 3mm;
+    }
+    ul, ol {
+      padding-left: 6mm;
+    }
+    li {
+      margin: 0 0 1.4mm;
+    }
+    code {
+      font-family: Consolas, monospace;
+      background: #eef4f2;
+      padding: .2mm 1mm;
+      border-radius: 1mm;
+    }
+    strong {
+      color: #122f2b;
+    }
+  </style>
+</head>
+<body>
+${markdownToHtml(markdown)}
+</body>
+</html>`;
+}
+
+function markdownToHtml(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const html = [];
+  let list = null;
+
+  const closeList = () => {
+    if (list) {
+      html.push(`</${list}>`);
+      list = null;
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeList();
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      closeList();
+      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    const bullet = /^-\s+(.+)$/.exec(trimmed);
+    if (bullet) {
+      if (list !== 'ul') {
+        closeList();
+        list = 'ul';
+        html.push('<ul>');
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    const ordered = /^\d+\.\s+(.+)$/.exec(trimmed);
+    if (ordered) {
+      if (list !== 'ol') {
+        closeList();
+        list = 'ol';
+        html.push('<ol>');
+      }
+      html.push(`<li>${inlineMarkdown(ordered[1])}</li>`);
+      continue;
+    }
+    closeList();
+    html.push(`<p>${inlineMarkdown(trimmed)}</p>`);
+  }
+  closeList();
+  return html.join('\n');
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
 function printPdf(htmlPath, pdfPath) {
   const args = [
     '--headless=new',
@@ -323,6 +471,182 @@ function printPdf(htmlPath, pdfPath) {
   const result = spawnSync(chrome, args, { stdio: 'pipe', encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(`Chrome n'a pas pu generer ${pdfPath}\n${result.stderr || result.stdout}`);
+  }
+}
+
+function writeCardPngZip(zipPath, decks) {
+  const tempDir = mkdtempSync(resolve(tmpdir(), 'sops-cartes-'));
+  const entries = [];
+  try {
+    for (const deck of decks) {
+      const cards = orderCardsForPng(deck.cards);
+      cards.forEach((card, index) => {
+        const filename = `${deck.code}_${String(index + 1).padStart(2, '0')}_${card.type === 'Fonction' ? 'fonctions' : 'systeme'}_${slugify(card.name)}_${card.copy}.png`;
+        const htmlPath = resolve(tempDir, `${filename}.html`);
+        const pngPath = resolve(tempDir, filename);
+        writeFileSync(htmlPath, buildPngDocument(`${deck.code} - ${card.name}`, deck, card), 'utf8');
+        printPng(htmlPath, pngPath);
+        entries.push({ name: `png_cartes/${filename}`, path: pngPath });
+      });
+    }
+    writeZip(zipPath, entries);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function orderCardsForPng(cards) {
+  return [...cards].sort((a, b) => {
+    const typeRank = (a.type === 'Fonction' ? 0 : 1) - (b.type === 'Fonction' ? 0 : 1);
+    return typeRank || a.name.localeCompare(b.name, 'fr') || a.copy - b.copy;
+  });
+}
+
+function buildPngDocument(title, deck, card) {
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 600px;
+      height: 840px;
+      overflow: hidden;
+      background: #10140f;
+      color: #f7f2e9;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .card {
+      width: 600px;
+      height: 840px;
+      border: 6px solid color-mix(in srgb, var(--accent), #f7f2e9 36%);
+      border-radius: 36px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.02)),
+        #1b201b;
+      color: #f7f2e9;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.14);
+      position: relative;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 16px;
+      border: 2px dashed rgba(255,255,255,.12);
+      border-radius: 28px;
+      pointer-events: none;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      color: #f7f2e9;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: relative;
+      z-index: 1;
+    }
+    .card-header span,
+    .card-header strong {
+      border: 2px solid color-mix(in srgb, var(--accent), #ffffff 32%);
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: color-mix(in srgb, var(--accent), #1b201b 76%);
+      white-space: nowrap;
+    }
+    h2 {
+      margin: 0;
+      font-size: 54px;
+      line-height: 1.05;
+      color: #ffffff;
+      position: relative;
+      z-index: 1;
+    }
+    .rule {
+      border: 2px solid color-mix(in srgb, var(--accent), #ffffff 22%);
+      border-radius: 20px;
+      padding: 16px;
+      background: color-mix(in srgb, var(--accent), #ffffff 82%);
+      color: #20221e;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1.14;
+      position: relative;
+      z-index: 1;
+    }
+    p {
+      margin: 0;
+      color: #e7e2d8;
+      font-size: 32px;
+      line-height: 1.16;
+      position: relative;
+      z-index: 1;
+      overflow-wrap: anywhere;
+    }
+    .text-long p {
+      font-size: 26px;
+      line-height: 1.1;
+    }
+    .text-xlong p {
+      font-size: 22px;
+      line-height: 1.08;
+    }
+    .text-xlong h2 {
+      font-size: 48px;
+    }
+    .text-xlong .rule {
+      font-size: 30px;
+      padding: 12px;
+    }
+    footer {
+      margin-top: auto;
+      color: rgba(247,242,233,.68);
+      font-size: 20px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: relative;
+      z-index: 1;
+    }
+    .command { --type:#7ee787; }
+    .interrupt { --type:#ff7b72; }
+    .hardware { --type:#ffd166; }
+    .function { --type:#4ecdc4; }
+    .card.command, .card.interrupt, .card.hardware, .card.function {
+      border-color: color-mix(in srgb, var(--type), #ffffff 18%);
+    }
+  </style>
+</head>
+<body>
+${renderCardFace(deck.code, deck.accent, card)}
+</body>
+</html>`;
+}
+
+function printPng(htmlPath, pngPath) {
+  const args = [
+    '--headless=new',
+    '--disable-gpu',
+    '--no-sandbox',
+    '--hide-scrollbars',
+    '--window-size=600,840',
+    `--screenshot=${pngPath}`,
+    pathToFileURL(htmlPath).href
+  ];
+  const result = spawnSync(chrome, args, { stdio: 'pipe', encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`Chrome n'a pas pu generer ${pngPath}\n${result.stderr || result.stdout}`);
   }
 }
 
@@ -351,10 +675,15 @@ function findChrome() {
 }
 
 function writeZip(zipPath, paths) {
-  const files = paths.filter((path) => existsSync(path)).map((path) => ({
-    name: relative(path).replace(/\\/g, '/'),
-    data: readFileSync(path)
-  }));
+  const files = paths
+    .map((entry) => typeof entry === 'string'
+      ? { name: relative(entry).replace(/\\/g, '/'), path: entry }
+      : entry)
+    .filter((entry) => existsSync(entry.path))
+    .map((entry) => ({
+      name: entry.name.replace(/\\/g, '/'),
+      data: readFileSync(entry.path)
+    }));
   const chunks = [];
   const central = [];
   let offset = 0;
@@ -429,6 +758,15 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function slugify(value) {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 function chunk(values, size) {

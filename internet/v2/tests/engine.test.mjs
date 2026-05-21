@@ -82,6 +82,7 @@ function assertSoloSetup() {
     players: state.players.map((player) => {
       const copy = { ...player };
       delete copy.isBot;
+      delete copy.overclockSkipped;
       return copy;
     }),
     currentPlayerIndex: 0,
@@ -91,6 +92,7 @@ function assertSoloSetup() {
     log: []
   })));
   assert.equal(restored.players[0].isBot, false, 'Old saves without isBot remain human by default');
+  assert.equal(restored.players[0].overclockSkipped, false, 'Old saves without overclockSkipped remain compatible');
   assert.equal(restored.soloMode, false, 'Old saves without soloMode remain normal local games');
   assert.equal(restored.botProfile, 'equilibre', 'Old saves without botProfile use the balanced bot');
 }
@@ -339,6 +341,48 @@ function assertBotSkipsHardwareWhenSlotsAreFull() {
   assert.equal(state.currentPlayerIndex, 0, 'Bot ends turn when the only tempting action is impossible');
 }
 
+function assertBotOverclockChoices() {
+  let state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'equilibre' });
+  let computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  computer.hardware = [createCard('overclock')];
+  const completing = makeFunction('factorielle', 0, [0], { reachedZero: true, nextValue: -1, memUsed: 3 });
+  computer.active = [completing];
+  computer.updatedThisTurn = [completing.id];
+  const scoreBefore = computer.score;
+  assert.equal(bot.runBotStep(1), true, 'Balanced bot uses Overclocking when it completes a function');
+  assert.equal(computer.score > scoreBefore, true);
+  assert.equal(computer.overclockUsed, true);
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'pedagogique' });
+  computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  computer.hardware = [createCard('overclock')];
+  const nonCompleting = makeFunction('factorielle', 2, [2, 1], { reachedZero: false, nextValue: 0, memUsed: 4 });
+  computer.active = [nonCompleting];
+  computer.updatedThisTurn = [nonCompleting.id];
+  assert.equal(bot.runBotStep(1), true, 'Pedagogic bot explicitly passes non-finishing Overclocking');
+  assert.equal(computer.overclockSkipped, true);
+  assert.equal(nonCompleting.frames.length, 2);
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(state.phase, rules.PHASES.DRAW);
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  computer.hardware = [createCard('overclock')];
+  const aggressiveTarget = makeFunction('factorielle', 2, [2, 1], { reachedZero: false, nextValue: 0, memUsed: 4 });
+  computer.active = [aggressiveTarget];
+  computer.updatedThisTurn = [aggressiveTarget.id];
+  computer.memFree = 5;
+  assert.equal(bot.runBotStep(1), true, 'Aggressive bot may accept the Overclocking penalty');
+  assert.deepEqual(aggressiveTarget.frames, [2, 1, 0]);
+  assert.equal(computer.overclockUsed, true);
+}
+
 function assertSoloImportExportRoundTrip() {
   const state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
   const computer = state.players[1];
@@ -488,25 +532,108 @@ function assertPlanifierAndHotfix() {
   assert.equal(player.active[0].memUsed, player.active[0].cost);
 }
 
-function assertOverclockStillAllowsExtraUpdate() {
-  const state = engine.newGame('Ada', 'Grace');
-  const player = state.players[0];
+function assertHardwareReplacement() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.memFree = player.memTotal;
+  player.hand = [createCard('overclock'), createCard('planificateur'), createCard('ram')];
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  const ram = player.hand[0];
+  assert.equal(engine.playCard(0, ram.id), false, 'A third Hardware needs an explicit replacement choice');
+  assert.deepEqual(player.hardware.map((card) => card.key), ['overclock', 'planificateur']);
 
-  player.hand = [createCard('factorielle'), createCard('overclock')];
+  const replaced = player.hardware.find((card) => card.key === 'overclock');
+  assert.equal(engine.playCard(0, ram.id, { replaceHardwareId: replaced.id }), true, 'A third Hardware can replace an existing Hardware');
+  assert.deepEqual(player.hardware.map((card) => card.key), ['planificateur', 'ram']);
+  assert.equal(player.discard.some((card) => card.key === 'overclock'), true, 'Replaced Hardware goes to discard');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.memFree = player.memTotal;
+  player.hand = [createCard('ram'), createCard('overclock'), createCard('planificateur')];
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  const totalBefore = player.memTotal;
+  const planifier = player.hand[0];
+  const ramInPlay = player.hardware.find((card) => card.key === 'ram');
+  assert.equal(engine.playCard(0, planifier.id, { replaceHardwareId: ramInPlay.id }), true);
+  assert.equal(player.memTotal, totalBefore - 4, 'Replacing RAM removes its ongoing memory-total bonus');
+  assert.equal(player.hardware.some((card) => card.key === 'ram'), false);
+}
+
+function assertOverclockTimingAndPenalty() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  player.hand = [createCard('factorielle'), createCard('sentinelle'), createCard('overclock')];
   player.memFree = player.memTotal;
   assert.equal(engine.playCard(0, player.hand[0].id, { R: 2 }), true);
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 1 }), true);
   assert.equal(engine.playCard(0, player.hand[0].id), true);
-  const func = player.active[0];
+  let factorielle = player.active.find((fn) => fn.cardKey === 'factorielle');
+  let sentinelle = player.active.find((fn) => fn.cardKey === 'sentinelle');
 
   state.phase = rules.PHASES.UPDATE;
   player.updatedThisTurn = [];
-  assert.equal(engine.updateFunction(func.id), true);
-  assert.deepEqual(func.frames, [2, 1]);
-  assert.equal(player.updatedThisTurn.includes(func.id), true);
-  assert.equal(engine.updateFunction(func.id), false, 'Normal update cannot run twice in the same update phase');
-  assert.equal(engine.canUseOverclock(func.id), true, 'Overclock remains legal after the normal update');
-  assert.equal(engine.useOverclock(func.id), true);
-  assert.deepEqual(func.frames, [2, 1, 0], 'Overclock performs the extra update on the same function');
+  assert.equal(engine.updateFunction(factorielle.id), true);
+  assert.equal(engine.canUseOverclock(factorielle.id), false, 'Overclock is unavailable while mandatory updates remain');
+  assert.equal(engine.updateFunction(sentinelle.id), true);
+  assert.equal(engine.canUseOverclock(factorielle.id), true, 'Overclock is available after mandatory updates');
+  const memoryBefore = player.memFree;
+  assert.equal(engine.useOverclock(factorielle.id), true);
+  assert.deepEqual(factorielle.frames, [2, 1, 0]);
+  assert.equal(player.memFree, memoryBefore - 2, 'Overclock stack cost plus immediate penalty apply when function stays active');
+  assert.equal(engine.canUseOverclock(factorielle.id), false, 'Overclock is once per turn');
+  assert.equal(engine.validateUpdatePhase(), true);
+  assert.equal(state.phase, rules.PHASES.DRAW);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('overclock')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  factorielle = makeFunction('factorielle', 0, [0], { reachedZero: true, nextValue: -1, memUsed: 3 });
+  player.active = [factorielle];
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [factorielle.id];
+  assert.equal(engine.canUseOverclock(factorielle.id), true);
+  const beforeCompletionOverclock = player.memFree;
+  assert.equal(engine.useOverclock(factorielle.id), true);
+  assert.equal(player.active.some((fn) => fn.id === factorielle.id), false, 'Overclock can complete a function');
+  assert.ok(player.memFree >= beforeCompletionOverclock, 'No Overclock penalty is applied when the function completes');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('factorielle'), createCard('overclock')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 1 }), true);
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  factorielle = player.active[0];
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(factorielle.id), true);
+  assert.equal(engine.validateUpdatePhase(), false, 'Update phase cannot advance until Overclock is used or passed');
+  assert.equal(engine.canSkipOverclock(), true);
+  assert.equal(engine.skipOverclock(), true);
+  assert.equal(engine.validateUpdatePhase(), true);
+  assert.equal(state.phase, rules.PHASES.DRAW);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  player.hand = [createCard('overclock')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  const fragile = makeFunction('factorielle', 6, [6, 5, 4, 3, 2, 1], { reachedZero: false, nextValue: 0, memUsed: 8 });
+  player.active = [fragile];
+  player.memFree = 4;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [fragile.id];
+  const memoryBeforeBreak = player.memFree;
+  assert.equal(engine.useOverclock(fragile.id), true);
+  assert.equal(fragile.broken, true, 'Overclock can break an overfull function');
+  assert.equal(player.memFree, memoryBeforeBreak - 1, 'Overclock penalty applies immediately when the extra update breaks the function');
 }
 
 function assertRebootStopsActions() {
@@ -543,6 +670,39 @@ function assertRebootStopsActions() {
   state.phase = rules.PHASES.DRAW;
   assert.ok(engine.drawForPlayer('system'));
   assert.equal(engine.canRebootCurrentPlayer(), false, 'A draw blocks voluntary reboot for the rest of the turn');
+}
+
+function assertSwapBrutalCompletionWindow() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  player.hand = [createCard('factorielle')];
+  player.memFree = player.memTotal;
+  assert.equal(engine.playCard(0, player.hand[0].id, { R: 0 }), true);
+  const func = player.active[0];
+  engine.endTurn();
+  state.currentPlayerIndex = 0;
+  state.turn = 2;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  player.completedThisTurn = false;
+  assert.equal(engine.updateFunction(func.id), true, 'Function completion during update counts for the turn');
+  state.phase = rules.PHASES.ACTION;
+  player.hand = [createCard('swap')];
+  player.memFree = 3;
+  player.memTotal = 11;
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  assert.equal(engine.endTurn(), true);
+  assert.equal(player.memTotal, 11, 'Swap penalty is avoided by a function completed earlier this turn');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.hand = [createCard('swap')];
+  player.memFree = 3;
+  player.memTotal = 11;
+  assert.equal(engine.playCard(0, player.hand[0].id), true);
+  assert.equal(engine.endTurn(), true);
+  assert.equal(player.memTotal, 10, 'Swap penalty applies if no function completed during the turn');
 }
 
 function assertInterruptsCanReactOnOpponentTurn() {
@@ -728,6 +888,88 @@ function assertDeckChoiceEffectsMatchCardTexts() {
   assert.equal(engine.resolvePendingDeckEffect({ targetPlayerIndex: 0, deckType: 'system', action: 'bottom', cardId: bottomed.id }), true);
   assert.equal(player.hand.some((card) => card.id === top.id), true, 'Tri Fusion base case draws before the unwind choice');
   assert.deepEqual(player.systemDeck.map((card) => card.id), [untouched.id, bottomed.id], 'Tri Fusion can move one of the two seen cards under the pile');
+}
+
+function assertCompactageAndDebuggerDetails() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  const broken = makeFunction('quicksort', 3, [3, 2, 1], { broken: true, reachedZero: false, nextValue: 0, memUsed: 5 });
+  const compactage = makeFunction('compactage', 2, [2], { reachedZero: true, nextValue: -1, memUsed: 3 });
+  player.active = [compactage, broken];
+  player.systemDeck = [createCard('swap')];
+  player.functionsDeck = [createCard('factorielle')];
+  player.memFree = 3;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(compactage.id), true);
+  assert.equal(player.active.some((fn) => fn.id === broken.id), false, 'Compactage cleans a broken function if possible');
+  assert.equal(player.hand.some((card) => card.key === 'swap'), true, 'Compactage draws System when B(R) >= 2');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  const compactageWithoutBroken = makeFunction('compactage', 2, [2], { reachedZero: true, nextValue: -1, memUsed: 3 });
+  player.active = [compactageWithoutBroken];
+  player.systemDeck = [createCard('ram')];
+  player.functionsDeck = [createCard('factorielle')];
+  player.memFree = 4;
+  state.phase = rules.PHASES.UPDATE;
+  player.updatedThisTurn = [];
+  assert.equal(engine.updateFunction(compactageWithoutBroken.id), true);
+  assert.equal(player.hand.some((card) => card.key === 'ram'), true, 'Compactage draws System even when no broken function was cleaned');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  const debugTarget = makeFunction('factorielle', 2, [2, 1], { broken: true, reachedZero: false, nextValue: 0, memUsed: 4 });
+  player.active = [debugTarget];
+  player.hand = [createCard('debug')];
+  player.memFree = 5;
+  state.phase = rules.PHASES.ACTION;
+  assert.equal(engine.playCard(0, player.hand[0].id, { functionId: debugTarget.id }), true);
+  assert.equal(debugTarget.broken, false, 'Debugger repairs a non-empty broken function');
+  assert.deepEqual(debugTarget.frames, [2]);
+  assert.equal(debugTarget.memUsed, 3);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  const emptied = makeFunction('factorielle', 2, [2], { broken: true, reachedZero: false, nextValue: 1, memUsed: 3 });
+  player.active = [emptied];
+  player.hand = [createCard('debug')];
+  player.memFree = 5;
+  const scoreBefore = player.score;
+  state.phase = rules.PHASES.ACTION;
+  assert.equal(engine.playCard(0, player.hand[0].id, { functionId: emptied.id }), true);
+  assert.equal(player.active.some((fn) => fn.id === emptied.id), false, 'Debugger discards a function emptied by debugging');
+  assert.equal(player.score, scoreBefore, 'Debugger does not score or apply terminal effects when emptying a function');
+  assert.equal(player.memFree, 8, 'Debugger releases the stuck function memory');
+}
+
+function assertAnyOwnerInterruptTargets() {
+  const state = engine.newGame('Ada', 'Grace');
+  const player = state.players[0];
+  const own = makeFunction('tri_fusion', 4, [4, 3, 2, 1], { reachedZero: false, nextValue: 0, memUsed: 6 });
+  player.active = [own];
+  player.hand = [createCard('stack_spike')];
+  player.memFree = player.memTotal;
+  state.phase = rules.PHASES.ACTION;
+  assert.equal(engine.playCard(0, player.hand[0].id, { functionId: own.id }), true, 'Stack Spike can target own function with 4 or 5 frames');
+  assert.equal(own.frames.filter((frame) => frame === 'P').length, 2);
+
+  const state2 = engine.newGame('Ada', 'Grace');
+  const current = state2.players[0];
+  const ownInjectionTarget = makeFunction('factorielle', 2, [2, 1], { reachedZero: false, nextValue: 0, memUsed: 4 });
+  current.active = [ownInjectionTarget];
+  current.hand = [createCard('injection')];
+  current.memFree = current.memTotal;
+  state2.phase = rules.PHASES.ACTION;
+  assert.equal(engine.playCard(0, current.hand[0].id, { functionId: ownInjectionTarget.id }), true, 'Injection can target own function');
+  assert.equal(ownInjectionTarget.frames.includes('P'), true);
+}
+
+function assertOverclockButtonPassesSelectedId() {
+  const uiSource = readFileSync(resolve(repoRoot, 'internet/v2/public/assets/js/ui.js'), 'utf8');
+  assert.match(uiSource, /map\(\(fn\) => \(\{ id: fn\.id, playerIndex: currentPlayer\.index, functionId: fn\.id, label: fn\.name \}\)\)/, 'Overclock target choices expose id for chooseTargetFunction');
+  assert.match(uiSource, /if \(selected\) applyOverclock\(selected\);/, 'Overclock button applies the selected function id');
+  assert.doesNotMatch(uiSource, /applyOverclock\(selected\.functionId\)/, 'Overclock button must not expect an object from chooseTargetFunction');
 }
 
 function assertEndTurnInActionPhase() {
@@ -980,6 +1222,7 @@ assertBotVoluntaryReboot();
 assertBotReactionGuards();
 assertBotPendingDeckEffects();
 assertBotSkipsHardwareWhenSlotsAreFull();
+assertBotOverclockChoices();
 assertSoloImportExportRoundTrip();
 assertBotReactionCountersResetOnTurnChange();
 assertCompleteBotTurnWithFunctionDrawActionEnd();
@@ -988,14 +1231,19 @@ assertFunctionMemoryLifecycle();
 assertStructuredLog();
 assertUndo();
 assertPlanifierAndHotfix();
-assertOverclockStillAllowsExtraUpdate();
+assertHardwareReplacement();
+assertOverclockTimingAndPenalty();
 assertRebootStopsActions();
+assertSwapBrutalCompletionWindow();
 assertInterruptsCanReactOnOpponentTurn();
 assertDrawRulesAndFunctionReplacement();
 assertDrawExhaustionForcesRebootWhenUsedMemoryIsTooHigh();
 assertPeekEffectsRevealDeckTopsWithoutDrawing();
 assertDeckTopPreviewHelpers();
 assertDeckChoiceEffectsMatchCardTexts();
+assertCompactageAndDebuggerDetails();
+assertAnyOwnerInterruptTargets();
+assertOverclockButtonPassesSelectedId();
 assertEndTurnInActionPhase();
 assertDemoScenarios();
 

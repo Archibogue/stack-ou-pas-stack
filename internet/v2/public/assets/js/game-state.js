@@ -30,6 +30,7 @@ export function createPlayer(name, index) {
     planifierUsed: false,
     overclockTarget: null,
     overclockUsed: false,
+    overclockSkipped: false,
     swapActive: false,
     tempMemory: 0,
     rebootedThisTurn: false,
@@ -123,6 +124,7 @@ export function restoreState(data) {
     player.planifierUsed = Boolean(player.planifierUsed);
     player.overclockTarget = player.overclockTarget || null;
     player.overclockUsed = Boolean(player.overclockUsed);
+    player.overclockSkipped = Boolean(player.overclockSkipped);
     player.swapActive = Boolean(player.swapActive);
     player.tempMemory = player.tempMemory || 0;
     player.rebootedThisTurn = Boolean(player.rebootedThisTurn);

@@ -21,7 +21,7 @@ Les planches de cartes sont générées depuis les définitions de la version we
 node physique/initiation/scripts/generate-print-assets.mjs
 ```
 
-Le script régénère les HTML sources, les PDF J1/J2/global et le ZIP du kit d’impression web.
+Le script régénère les HTML sources, les PDF J1/J2/global, le ZIP PNG des cartes et le ZIP du kit d’impression web.
 
 ## Paramètres rapides
 
