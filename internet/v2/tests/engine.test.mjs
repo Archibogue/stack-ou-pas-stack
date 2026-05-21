@@ -319,6 +319,26 @@ function assertBotPendingDeckEffects() {
   assert.equal(state.pendingDeckEffect, null);
 }
 
+function assertBotSkipsHardwareWhenSlotsAreFull() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'pedagogique' });
+  const human = state.players[0];
+  const computer = state.players[1];
+  state.turn = 5;
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  human.active = [makeFunction('factorielle', 4, [4, 3, 2, 1, 0], { reachedZero: true, nextValue: -1, memUsed: 7 })];
+  computer.active = [];
+  computer.hardware = [createCard('planificateur'), createCard('overclock')];
+  computer.hand = [createCard('ram')];
+  computer.memFree = 3;
+  const logBefore = state.logSequence;
+
+  assert.equal(bot.runBotStep(1), true, 'Bot should make progress instead of retrying impossible RAM');
+  assert.equal(computer.hand.some((card) => card.key === 'ram'), true, 'Bot keeps RAM when hardware slots are full');
+  assert.equal(state.log.slice(logBefore).some((entry) => entry.text.includes('déjà 2 Hardware')), false);
+  assert.equal(state.currentPlayerIndex, 0, 'Bot ends turn when the only tempting action is impossible');
+}
+
 function assertSoloImportExportRoundTrip() {
   const state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
   const computer = state.players[1];
@@ -959,6 +979,7 @@ assertBotProfilesAffectDepthAndTargets();
 assertBotVoluntaryReboot();
 assertBotReactionGuards();
 assertBotPendingDeckEffects();
+assertBotSkipsHardwareWhenSlotsAreFull();
 assertSoloImportExportRoundTrip();
 assertBotReactionCountersResetOnTurnChange();
 assertCompleteBotTurnWithFunctionDrawActionEnd();

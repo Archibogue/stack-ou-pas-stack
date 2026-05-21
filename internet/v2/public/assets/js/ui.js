@@ -420,11 +420,10 @@ function promptNewGame() {
   renderGameScreen();
 }
 
-function startSoloLocalGame() {
+async function startSoloLocalGame() {
   stopRemotePolling();
   const name = prompt('Nom du joueur humain ?', 'Joueur Cyan')?.trim() || 'Joueur Cyan';
-  const profileAnswer = prompt('Niveau du bot ? pedagogique, equilibre ou agressif', 'equilibre')?.trim().toLowerCase();
-  const botProfile = normalizeBotProfileInput(profileAnswer);
+  const botProfile = await askForBotProfile();
   resetCounterAnimations();
   startSoloGame(name, 'Ordinateur', { botProfile });
   renderGameScreen();
@@ -683,6 +682,44 @@ function normalizeBotProfileInput(value) {
   if (normalized === 'pedagogique') return 'pedagogique';
   if (normalized === 'agressif') return 'agressif';
   return 'equilibre';
+}
+
+function askForBotProfile() {
+  return new Promise((resolve) => {
+    const profiles = [
+      ['pedagogique', 'Pédagogique', 'Prudent, lisible, interruptions rares.'],
+      ['equilibre', 'Équilibré', 'Standard, légal et raisonnable.'],
+      ['agressif', 'Agressif', 'Plus de pression et d’interruptions.']
+    ];
+    const name = `bot-profile-${Date.now()}`;
+    const content = createElement('div', { className: 'bot-profile-choice' }, profiles.map(([value, label, help]) => (
+      createElement('label', { className: 'radio-option' }, [
+        createElement('input', {
+          type: 'radio',
+          name,
+          value,
+          checked: value === 'equilibre'
+        }),
+        createElement('span', {}, [
+          createElement('strong', { textContent: label }),
+          createElement('small', { textContent: help })
+        ])
+      ])
+    )));
+    showModal('Niveau du bot', content, [
+      {
+        label: 'Commencer',
+        onClick: () => {
+          const selected = modal.querySelector(`input[name="${name}"]:checked`)?.value;
+          resolve(normalizeBotProfileInput(selected));
+        }
+      },
+      {
+        label: 'Annuler',
+        onClick: () => resolve('equilibre')
+      }
+    ]);
+  });
 }
 
 function getBotStepDelay() {

@@ -1934,6 +1934,43 @@ select {
   justify-content: flex-start;
 }
 
+.bot-profile-choice {
+  display: grid;
+  gap: 10px;
+}
+
+.radio-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 11px 12px;
+  cursor: pointer;
+}
+
+.radio-option input {
+  width: auto;
+  margin-top: 3px;
+  accent-color: var(--cyan);
+}
+
+.radio-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.radio-option strong {
+  color: var(--ink);
+}
+
+.radio-option small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .demo-guide {
   display: grid;
   gap: 12px;

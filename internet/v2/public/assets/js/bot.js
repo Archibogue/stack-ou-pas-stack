@@ -289,7 +289,11 @@ function chooseOverclockTarget() {
 }
 
 function findPlayableCard(player, key) {
-  return player.hand.find((card) => card.key === key && canPlayCard(player.index, card.id));
+  return player.hand.find((card) => (
+    card.key === key
+    && canPlayCard(player.index, card.id)
+    && (card.type !== 'Hardware' || player.hardware.length < 2)
+  ));
 }
 
 function safePlayCard(playerIndex, card, targetData = {}) {
