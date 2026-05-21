@@ -7,12 +7,14 @@ import {
   drawForPlayer,
   endTurn,
   getPendingDeckEffect,
+  getPendingHandLimitDiscard,
   getPendingUpdates,
   getState,
   logAction,
   newGame,
   playCard,
   rebootCurrentPlayer,
+  resolveHandLimitDiscard,
   resolvePendingDeckEffect,
   skipOverclock,
   updateFunction,
@@ -54,6 +56,7 @@ export function runBotStep(botIndex = getState()?.botIndex) {
   const effect = getPendingDeckEffect();
   if (effect && effect.ownerIndex !== botIndex) return false;
   if (resolveBotPendingEffect(botIndex)) return true;
+  if (resolveBotHandLimitDiscard(botIndex)) return true;
   if (state.winner !== null || state.currentPlayerIndex !== botIndex) return false;
 
   if (shouldVoluntaryReboot(botIndex)) {
@@ -377,6 +380,15 @@ function resolveBotPendingEffect(botIndex) {
   return resolvePendingDeckEffect(choice);
 }
 
+function resolveBotHandLimitDiscard(botIndex) {
+  const pending = getPendingHandLimitDiscard();
+  const state = getState();
+  if (!pending || pending.playerIndex !== botIndex) return false;
+  const bot = state.players[botIndex];
+  const choices = chooseHandLimitDiscards(bot, pending.discardCount);
+  return resolveHandLimitDiscard(choices.map((card) => card.id));
+}
+
 function chooseDeckType(player, allowedDecks) {
   if (allowedDecks.includes('system') && player.systemDeck.length > 0) return 'system';
   return allowedDecks[0] || 'system';
@@ -389,6 +401,32 @@ function chooseRevealedCard(cards) {
     return index === -1 ? priorities.length : index;
   };
   return [...cards].sort((a, b) => rank(a) - rank(b))[0] || cards[0] || null;
+}
+
+function chooseHandLimitDiscards(bot, count) {
+  const state = getState();
+  const opponent = state.players.find((player) => player.index !== bot.index);
+  const brokenCount = bot.active.filter((fn) => fn.broken).length;
+  const activeSlots = Math.max(0, 3 - bot.active.length);
+  const opponentHasActive = opponent?.active.some((fn) => !fn.broken);
+  const duplicateCounts = new Map();
+  bot.hand.forEach((card) => duplicateCounts.set(card.key, (duplicateCounts.get(card.key) || 0) + 1));
+
+  return [...bot.hand]
+    .sort((a, b) => keepScore(a) - keepScore(b))
+    .slice(0, count);
+
+  function keepScore(card) {
+    let score = 50;
+    if (card.type === 'Fonction') score += activeSlots > 0 ? 25 : -10;
+    if (card.key === 'hotfix' || card.key === 'collecte') score += brokenCount > 0 ? 30 : -8;
+    if (['stack_spike', 'injection', 'pollution'].includes(card.key)) score += opponentHasActive ? 18 : -10;
+    if (card.type === 'Hardware' && bot.hardware.length >= 2) score -= 16;
+    if ((duplicateCounts.get(card.key) || 0) > 1) score -= 8;
+    if (card.cost > bot.memFree + 2) score -= 12;
+    if (card.key === 'swap') score -= 5;
+    return score;
+  }
 }
 
 function latestHumanActionSequence(state, botIndex) {

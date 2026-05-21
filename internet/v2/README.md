@@ -57,6 +57,8 @@ Sur l’écran d’accueil, cliquer sur `Solo contre l'ordi`, saisir le nom du j
 
 Pendant la partie, vérifier que l’ordinateur joue étape par étape, que le badge `L'ordinateur réfléchit...` apparaît pendant son tour, qu’un message temporaire résume les actions importantes, et que le journal explique les décisions du bot. Le journal reste la trace complète de la partie.
 
+Règle de main : la limite est de 8 cartes en fin de tour. Un joueur peut dépasser 8 cartes pendant son tour, puis il doit défausser l’excédent au moment de finir son tour.
+
 Pour tester les sauvegardes, utiliser `Exporter JSON`, conserver le texte obtenu, puis relancer ou revenir à l’accueil et utiliser `Importer JSON`. Une partie solo importée doit reprendre normalement, y compris si c’est au tour du bot.
 
 En cas de bug, noter le profil choisi, le tour, la phase, les dernières lignes du journal, et joindre si possible un export JSON de la partie. Vérifier aussi la console du navigateur.
@@ -71,7 +73,7 @@ Les tests restent volontairement simples et sans framework externe :
 node internet/v2/tests/engine.test.mjs
 ```
 
-Ils vérifient les constantes de règles, la composition du deck par rapport au Markdown physique, la main de départ, la pioche Système, le remplacement automatique des Fonctions terminées, le cycle mémoire des fonctions, le Planificateur local, Hotfix et le reboot volontaire.
+Ils vérifient les constantes de règles, la composition du deck par rapport au Markdown physique, la main de départ, la limite de main, la pioche Système, le remplacement automatique des Fonctions terminées, le cycle mémoire des fonctions, le Planificateur local, Hotfix et le reboot volontaire.
 
 ## Mode solo contre l'ordi
 

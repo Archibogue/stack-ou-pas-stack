@@ -1,5 +1,12 @@
 # Changelog
 
+## V2 — limite de main
+
+- Ajout d’une limite de main à 8 cartes, vérifiée uniquement en fin de tour.
+- Ajout d’une défausse obligatoire humaine non contournable quand la main dépasse 8 cartes.
+- Défausse automatique du bot pour respecter la limite de main.
+- Alignement des règles web, règles physiques et kit imprimable.
+
 ## Kit physique initiation quadratique — textes clarifiés
 
 - Clarification des pioches qui prennent explicitement une carte Système.

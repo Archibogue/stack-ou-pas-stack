@@ -53,6 +53,7 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     logSequence: 0,
     undoStack: [],
     pendingDeckEffect: null,
+    pendingHandLimitDiscard: null,
     firstTurn: true,
     soloMode: false,
     botIndex: null,
@@ -115,6 +116,7 @@ export function restoreState(data) {
   state.logSequence = state.logSequence || state.log.length || 0;
   state.undoStack = [];
   state.pendingDeckEffect = state.pendingDeckEffect || null;
+  state.pendingHandLimitDiscard = state.pendingHandLimitDiscard || null;
   state.soloMode = Boolean(state.soloMode);
   state.botIndex = Number.isInteger(state.botIndex) ? state.botIndex : null;
   state.botProfile = ['pedagogique', 'equilibre', 'agressif'].includes(state.botProfile) ? state.botProfile : 'equilibre';

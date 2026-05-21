@@ -93,6 +93,7 @@ function assertSoloSetup() {
   })));
   assert.equal(restored.players[0].isBot, false, 'Old saves without isBot remain human by default');
   assert.equal(restored.players[0].overclockSkipped, false, 'Old saves without overclockSkipped remain compatible');
+  assert.equal(restored.pendingHandLimitDiscard, null, 'Old saves without pendingHandLimitDiscard remain compatible');
   assert.equal(restored.soloMode, false, 'Old saves without soloMode remain normal local games');
   assert.equal(restored.botProfile, 'equilibre', 'Old saves without botProfile use the balanced bot');
 }
@@ -564,6 +565,78 @@ function assertHardwareReplacement() {
   assert.equal(player.hardware.some((card) => card.key === 'ram'), false);
 }
 
+function assertHandLimitEndTurn() {
+  let state = engine.newGame('Ada', 'Grace');
+  let player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.hand = Array.from({ length: 9 }, () => createCard('purge'));
+  assert.equal(player.hand.length, 9, 'A player can exceed the hand limit during the turn');
+  assert.equal(engine.canPlayCard(0, player.hand[0].id), true, 'Hand limit does not block play during the turn');
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.hand = Array.from({ length: 8 }, () => createCard('purge'));
+  assert.equal(engine.endTurn(), true);
+  assert.equal(state.pendingHandLimitDiscard, null, 'Eight cards does not trigger hand-limit discard');
+  assert.equal(state.currentPlayerIndex, 1);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.hand = Array.from({ length: 10 }, () => createCard('purge'));
+  const chosen = player.hand.slice(0, 2).map((card) => card.id);
+  assert.equal(engine.endTurn(), true);
+  assert.deepEqual(state.pendingHandLimitDiscard, { playerIndex: 0, maxHandSize: rules.MAX_HAND_SIZE, discardCount: 2 });
+  assert.equal(state.currentPlayerIndex, 0, 'Turn does not pass before human discard is resolved');
+  assert.equal(engine.canEndTurn(), false, 'End turn cannot be clicked again while discard is pending');
+  assert.equal(engine.resolveHandLimitDiscard(chosen.slice(0, 1)), false, 'Wrong discard count is refused');
+  assert.equal(engine.resolveHandLimitDiscard([chosen[0], 'missing-card']), false, 'Invalid card ids are refused');
+  assert.equal(engine.resolveHandLimitDiscard(chosen), true);
+  assert.equal(player.hand.length, rules.MAX_HAND_SIZE);
+  assert.equal(player.discard.length, 2);
+  assert.equal(state.pendingHandLimitDiscard, null);
+  assert.equal(state.currentPlayerIndex, 1, 'Turn passes after hand-limit discard is resolved');
+
+  const exported = JSON.stringify(state);
+  const imported = engine.importGame(exported);
+  assert.equal(imported.pendingHandLimitDiscard, null);
+
+  state = engine.newGame('Ada', 'Grace');
+  player = state.players[0];
+  state.phase = rules.PHASES.ACTION;
+  player.hand = Array.from({ length: 9 }, () => createCard('purge'));
+  assert.equal(engine.endTurn(), true);
+  const pendingExport = JSON.stringify(state);
+  const restored = engine.importGame(pendingExport);
+  assert.deepEqual(restored.pendingHandLimitDiscard, { playerIndex: 0, maxHandSize: rules.MAX_HAND_SIZE, discardCount: 1 });
+}
+
+function assertBotHandLimitDiscard() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.memFree = 0;
+  computer.hand = [
+    createCard('factorielle'),
+    createCard('tri_fusion'),
+    createCard('collecte'),
+    createCard('hotfix'),
+    createCard('stack_spike'),
+    createCard('injection'),
+    createCard('pollution'),
+    createCard('ram'),
+    createCard('swap'),
+    createCard('debug')
+  ];
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(computer.hand.length, rules.MAX_HAND_SIZE, 'Bot automatically discards to the hand limit when ending its turn');
+  assert.equal(computer.discard.length, 2);
+  assert.equal(state.pendingHandLimitDiscard, null);
+  assert.equal(state.currentPlayerIndex, 0);
+}
+
 function assertOverclockTimingAndPenalty() {
   let state = engine.newGame('Ada', 'Grace');
   let player = state.players[0];
@@ -988,9 +1061,12 @@ function assertRulesConstants() {
   const markdown = readFileSync(resolve(repoRoot, 'physique/initiation/regles/REGLES_INITIATION_QUADRATIQUE.md'), 'utf8');
   assert.match(markdown, /Mémoire de départ.+11 mémoire totale \/ 11 mémoire libre/);
   assert.match(markdown, /La phase de pioche ne permet pas de tirer une nouvelle Fonction/);
+  assert.match(markdown, /Limite de main/);
+  assert.match(markdown, /plus de 8 cartes en main/);
   assert.match(markdown, /reboot qui redonne une main de départ/);
   assert.equal(rules.START_MEMORY, 11);
   assert.equal(rules.WIN_SCORE, 11);
+  assert.equal(rules.MAX_HAND_SIZE, 8);
   assert.equal(rules.MAX_FRAMES_PER_FUNCTION, 6);
   assert.equal(rules.bonusRecursion(5), 25);
 }
@@ -1232,6 +1308,8 @@ assertStructuredLog();
 assertUndo();
 assertPlanifierAndHotfix();
 assertHardwareReplacement();
+assertHandLimitEndTurn();
+assertBotHandLimitDiscard();
 assertOverclockTimingAndPenalty();
 assertRebootStopsActions();
 assertSwapBrutalCompletionWindow();

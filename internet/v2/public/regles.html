@@ -107,15 +107,22 @@
         <li><strong>Phase de mise à jour</strong> : le joueur actif met à jour toutes ses fonctions actives non cassées, dans l’ordre de son choix.</li>
         <li><strong>Phase de pioche</strong> : il pioche 1 carte dans la pile Système. Le premier joueur saute cette phase au tout premier tour.</li>
         <li><strong>Phase de conception</strong> : il peut jouer des Fonctions, Commandes et Hardware.</li>
-        <li><strong>Fin de tour</strong> : les effets temporaires cessent, puis le tour passe à l’autre joueur.</li>
+        <li><strong>Fin de tour</strong> : les effets temporaires cessent, la limite de main est vérifiée, puis le tour passe à l’autre joueur.</li>
       </ol>
       <p>On ne peut pas tirer librement une nouvelle Fonction pendant la phase de pioche. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.</p>
       <p>Les fonctions actives non cassées doivent toutes être mises à jour avant de passer à la pioche. Une carte ne peut pas être jouée avant la phase de conception, sauf si une règle d’Interrupt précise explicitement une réaction.</p>
       <p>Dans la V2 web locale, une carte Interrupt peut être jouée pendant le tour adverse dès que sa condition est remplie et qu’une cible légale existe.</p>
     </section>
 
+    <section id="limite-main" class="panel panel-body rules-section">
+      <h2>5. Limite de main</h2>
+      <p>Un joueur peut avoir autant de cartes qu’il veut pendant son tour.</p>
+      <p>À la fin de son tour, s’il a plus de 8 cartes en main, il doit défausser des cartes de son choix jusqu’à n’en garder que 8.</p>
+      <p>Les cartes défaussées ainsi vont dans sa défausse normale.</p>
+    </section>
+
     <section id="memoire" class="panel panel-body rules-section">
-      <h2>5. Mémoire</h2>
+      <h2>6. Mémoire</h2>
       <p>La mémoire totale est la capacité maximale du joueur. La mémoire libre sert à payer les cartes et les empilages récursifs.</p>
       <ul>
         <li>Une Fonction payée réserve son coût imprimé tant qu’elle reste active, cassée ou en cours d’exécution.</li>
@@ -136,7 +143,7 @@
     </section>
 
     <section id="fonctions" class="panel panel-body rules-section">
-      <h2>6. Fonctions et récursion</h2>
+      <h2>7. Fonctions et récursion</h2>
       <p>Quand une fonction est lancée, son contrôleur choisit sa profondeur <code>R</code> si la carte indique « Empiler jusqu’à X ». Pour une carte « Empiler X », <code>R=X</code>. La fonction place immédiatement son cadre initial <code>[R]</code>.</p>
       <p>À chaque phase de mise à jour, l’état de la fonction décide automatiquement de l’action :</p>
       <ul>
@@ -152,7 +159,7 @@
     </section>
 
     <section id="parasites" class="panel panel-body rules-section">
-      <h2>7. Cadres parasites et overflow</h2>
+      <h2>8. Cadres parasites et overflow</h2>
       <p>Un cadre parasite représente une charge parasite sur la pile d’appels.</p>
       <ul>
         <li>Il compte dans la taille de la pile.</li>
@@ -167,7 +174,7 @@
     </section>
 
     <section id="cartes-systeme" class="panel panel-body rules-section">
-      <h2>8. Commandes, Interrupts et Hardware</h2>
+      <h2>9. Commandes, Interrupts et Hardware</h2>
       <div class="rules-columns">
         <div>
           <h3>Commande</h3>
@@ -186,7 +193,7 @@
     </section>
 
     <section id="reboot" class="panel panel-body rules-section">
-      <h2>9. Reboot</h2>
+      <h2>10. Reboot</h2>
       <p>Au début de son tour, avant toute autre action du tour, un joueur peut effectuer un reboot volontaire. S’il a déjà mis à jour une fonction, pioché ou joué une carte ce tour-ci, il ne peut plus rebooter volontairement.</p>
       <p>Le reboot volontaire remplace toutes ses autres actions du tour.</p>
       <p>Un reboot forcé suit les mêmes étapes, mais il est effectué immédiatement quand une règle l’impose.</p>
@@ -203,7 +210,7 @@
     </section>
 
     <section id="victoire" class="panel panel-body rules-section">
-      <h2>10. Victoire</h2>
+      <h2>11. Victoire</h2>
       <p>Un joueur gagne dès qu’il remplit simultanément les trois conditions suivantes :</p>
       <ul>
         <li>avoir 11 points ou plus ;</li>
@@ -214,7 +221,7 @@
     </section>
 
     <section id="reference-cartes" class="panel panel-body rules-section">
-      <h2>11. Référence des cartes</h2>
+      <h2>12. Référence des cartes</h2>
 
       <h3>Fonctions</h3>
       <div class="rules-card-grid">

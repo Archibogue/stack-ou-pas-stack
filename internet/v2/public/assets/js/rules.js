@@ -1,5 +1,6 @@
 export const START_MEMORY = 11;
 export const WIN_SCORE = 11;
+export const MAX_HAND_SIZE = 8;
 export const MAX_FRAMES_PER_FUNCTION = 6;
 export const REQUIRED_COMPLETED_FUNCTIONS = 3;
 export const REQUIRED_DISTINCT_NAMES = 2;

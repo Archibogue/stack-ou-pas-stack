@@ -1,5 +1,13 @@
 # Changelog V2
 
+## Limite de main
+
+- Ajout de `MAX_HAND_SIZE = 8`.
+- La limite de main est vérifiée uniquement à la fin du tour.
+- Ajout d’une modale de défausse obligatoire pour les joueurs humains.
+- Le bot défausse automatiquement les cartes les moins utiles pour revenir à 8.
+- Sauvegarde/import/export compatibles avec une défausse obligatoire en attente.
+
 ## Kit physique initiation quadratique — textes clarifiés
 
 - Textes des cartes V2 alignés avec le kit physique imprimable.

@@ -8,6 +8,7 @@ Version physique d’initiation, issue de Neon Stack V5.4 mais accélérée pour
 - **Condition de victoire** : 11 points ou plus.
 - **Condition qualitative** : au moins 3 fonctions terminées, avec au moins 2 noms de fonctions différents.
 - **Limite de pile** : une fonction casse si elle devrait recevoir un 7e cadre.
+- **Limite de main** : 8 cartes, vérifiée uniquement à la fin du tour.
 - **Bonus de récursion** : `B(R)=R²`.
 - **Decks** : deux decks d’initiation symétriques de 26 cartes.
 
@@ -34,11 +35,19 @@ S’il ne reboote pas, chaque tour suit ensuite obligatoirement cet ordre :
 1. **Phase de mise à jour** : toutes les fonctions actives non cassées du joueur actif sont mises à jour, dans l’ordre choisi par ce joueur.
 2. **Phase de pioche** : le joueur pioche 1 carte dans la pile Système.
 3. **Phase de conception** : le joueur peut jouer des Fonctions, Commandes et Hardware.
-4. **Fin de tour** : les effets temporaires cessent.
+4. **Fin de tour** : les effets temporaires cessent, puis la limite de main est vérifiée.
 
 Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts. Une Interrupt peut être jouée pendant le tour adverse quand sa condition de réaction est explicitement remplie et qu’une cible légale existe.
 
 La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.
+
+## Limite de main
+
+Un joueur peut avoir autant de cartes qu’il veut pendant son tour.
+
+À la fin de son tour, s’il a plus de 8 cartes en main, il doit défausser des cartes de son choix jusqu’à n’en garder que 8.
+
+Les cartes défaussées ainsi vont dans sa défausse normale.
 
 ## Fonctionnement des fonctions
 

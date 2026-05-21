@@ -1,5 +1,5 @@
-import { PHASES } from './rules.js';
-import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, canSkipOverclock, skipOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
+import { MAX_HAND_SIZE, PHASES } from './rules.js';
+import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, getPendingHandLimitDiscard, resolvePendingDeckEffect, resolveHandLimitDiscard, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, canSkipOverclock, skipOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
 import { getBotProfileLabel, maybeReactToHumanAction, runBotStep, startSoloGame } from './bot.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
@@ -16,6 +16,7 @@ let lastSeenLogOrder = 0;
 let lastCounterSnapshot = null;
 let counterDeltas = new Map();
 let openPendingDeckEffectId = null;
+let openPendingHandLimitKey = null;
 let botThinking = false;
 let botStepCount = 0;
 let botStepTimer = null;
@@ -583,6 +584,7 @@ function renderGameScreen() {
   if (!remoteBoardLayout) app.append(renderHelpPanel());
   lastCounterSnapshot = buildCounterSnapshot(state);
   counterDeltas = new Map();
+  maybeOpenPendingHandLimitDiscard();
   maybeOpenPendingDeckEffect();
   scheduleBotTurn();
 }
@@ -594,6 +596,8 @@ function scheduleBotTurn() {
   if (!current?.isBot || botThinking) return;
   if (botPausedSignature === botProgressSignature(state)) return;
   if (isHumanModalOpen()) return;
+  const handLimit = getPendingHandLimitDiscard();
+  if (handLimit && handLimit.playerIndex !== current.index) return;
   const effect = getPendingDeckEffect();
   if (effect && effect.ownerIndex !== current.index) return;
   botThinking = true;
@@ -615,6 +619,12 @@ function queueBotStep(botIndex) {
       }
       if (isHumanModalOpen()) {
         botThinking = false;
+        return;
+      }
+      const handLimit = getPendingHandLimitDiscard();
+      if (handLimit && handLimit.playerIndex !== botIndex) {
+        botThinking = false;
+        renderGameScreen();
         return;
       }
       const effect = getPendingDeckEffect();
@@ -652,6 +662,7 @@ function triggerBotReaction() {
   const state = getState();
   if (!state?.soloMode || botThinking || isRemoteState(state)) return false;
   if (isHumanModalOpen()) return false;
+  if (getPendingHandLimitDiscard()) return false;
   const beforeSequence = state.logSequence || 0;
   const changed = maybeReactToHumanAction(state.botIndex);
   if (changed) {
@@ -735,7 +746,8 @@ function botProgressSignature(state) {
     currentPlayerIndex: state.currentPlayerIndex,
     phase: state.phase,
     logSequence: state.logSequence || 0,
-    pendingDeckEffectId: state.pendingDeckEffect?.id || null
+    pendingDeckEffectId: state.pendingDeckEffect?.id || null,
+    pendingHandLimitDiscard: state.pendingHandLimitDiscard ? `${state.pendingHandLimitDiscard.playerIndex}:${state.pendingHandLimitDiscard.discardCount}` : null
   });
 }
 
@@ -1603,6 +1615,7 @@ function showPeekDecision(player, count, allowBottom, sourceName) {
 }
 
 function maybeOpenPendingDeckEffect() {
+  if (getPendingHandLimitDiscard()) return;
   const effect = getPendingDeckEffect();
   if (!effect) {
     openPendingDeckEffectId = null;
@@ -1631,6 +1644,71 @@ function showPendingDeckTargetChoice(effect) {
     });
   });
   showModal(effect.sourceName, createElement('div', { className: 'modal-choice' }, choices), []);
+}
+
+function maybeOpenPendingHandLimitDiscard() {
+  const pending = getPendingHandLimitDiscard();
+  if (!pending) {
+    openPendingHandLimitKey = null;
+    return;
+  }
+  if (!canControlPlayer(pending.playerIndex)) return;
+  const key = `${pending.playerIndex}:${pending.discardCount}:${getState().players[pending.playerIndex]?.hand.map((card) => card.id).join('|')}`;
+  if (openPendingHandLimitKey === key && !modal.classList.contains('hidden')) return;
+  openPendingHandLimitKey = key;
+  showHandLimitDiscardModal(pending);
+}
+
+function showHandLimitDiscardModal(pending) {
+  const state = getState();
+  const player = state.players[pending.playerIndex];
+  if (!player) return;
+  const selected = new Set();
+  let confirmButton = null;
+  const counter = createElement('p', {
+    className: 'help',
+    textContent: `Limite de main : choisissez ${pending.discardCount} carte(s) à défausser pour revenir à ${pending.maxHandSize || MAX_HAND_SIZE}.`
+  });
+  const refresh = () => {
+    counter.textContent = `Limite de main : ${selected.size}/${pending.discardCount} carte(s) sélectionnée(s) pour revenir à ${pending.maxHandSize || MAX_HAND_SIZE}.`;
+    if (confirmButton) confirmButton.disabled = selected.size !== pending.discardCount;
+  };
+  const cards = createElement('div', { className: 'hand-limit-list' }, player.hand.map((card) => {
+    const checkbox = createElement('input', { type: 'checkbox' });
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selected.add(card.id);
+      else selected.delete(card.id);
+      refresh();
+    });
+    return createElement('label', { className: 'hand-limit-card' }, [
+      checkbox,
+      createElement('span', {}, [
+        createElement('strong', { textContent: card.name }),
+        createElement('small', { textContent: `${card.type} - coût ${card.cost}` })
+      ])
+    ]);
+  }));
+  confirmButton = createElement('button', {
+    className: 'primary',
+    disabled: true,
+    onclick: () => {
+      const beforeSequence = getState().logSequence || 0;
+      const resolved = resolveHandLimitDiscard([...selected]);
+      noteRemoteLocalAction(resolved);
+      if (!resolved) return;
+      openPendingHandLimitKey = null;
+      hideModal();
+      renderGameScreen();
+      showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} respecte la limite de main.`), { actor: 'human', tone: 'warn' });
+      spawnArcadeEffect('repair', 'DISCARD');
+    }
+  }, ['Défausser']);
+  const content = createElement('div', { className: 'hand-limit-modal' }, [
+    counter,
+    cards,
+    createElement('div', { className: 'modal-choice' }, [confirmButton])
+  ]);
+  showModal('Limite de main', content, []);
 }
 
 function showPendingDeckResolution(effect, targetPlayerIndex, deckType) {

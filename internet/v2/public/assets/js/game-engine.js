@@ -1,6 +1,6 @@
 import { createGameState, drawFromDeck, drawStartingHand, createFunctionFrame, restoreState, cloneStateForSave } from './game-state.js';
 import { CARD_DEFINITIONS, DECK_COMPOSITION, createCard } from './cards.js';
-import { MAX_FRAMES_PER_FUNCTION, PHASES, bonusRecursion, isWinningState } from './rules.js';
+import { MAX_FRAMES_PER_FUNCTION, MAX_HAND_SIZE, PHASES, bonusRecursion, isWinningState } from './rules.js';
 import { saveLocalState, exportStateToClipboard, importStateFromJson, saveRemoteGame } from './storage.js';
 
 let gameState = null;
@@ -293,6 +293,7 @@ function markTurnAction(player) {
 
 export function canRebootCurrentPlayer() {
   if (!gameState || gameState.winner !== null) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   if (![PHASES.UPDATE, PHASES.DRAW, PHASES.ACTION].includes(gameState.phase)) return false;
   const player = getCurrentPlayer();
   return Boolean(player && !player.rebootedThisTurn && !player.turnActionsTaken);
@@ -301,6 +302,7 @@ export function canRebootCurrentPlayer() {
 export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId = null) {
   if (!gameState || gameState.winner !== null) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = gameState.players[playerIndex];
   if (!player || player.rebootedThisTurn) return false;
   const card = cardId ? player.hand.find((item) => item.id === cardId) : null;
@@ -314,11 +316,13 @@ export function canPlayCard(playerIndex = gameState?.currentPlayerIndex, cardId 
 export function canEndTurn() {
   if (gameState.winner !== null) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   return gameState.phase === PHASES.ACTION;
 }
 
 export function drawForPlayer(deckType) {
   if (gameState.pendingDeckEffect) return null;
+  if (gameState.pendingHandLimitDiscard) return null;
   if (gameState.phase !== PHASES.DRAW || gameState.winner !== null) return null;
   if (deckType !== 'system') {
     logAction(gameState, 'La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction arrive automatiquement quand une fonction se termine, ou pendant un reboot.', 'warn');
@@ -368,6 +372,42 @@ export function moveTopDeckCardToBottom(playerIndex, deckType, cardId = null) {
 
 export function getPendingDeckEffect() {
   return gameState?.pendingDeckEffect || null;
+}
+
+export function getPendingHandLimitDiscard() {
+  return gameState?.pendingHandLimitDiscard || null;
+}
+
+export function needsHandLimitDiscard(player) {
+  return Boolean(player && player.hand.length > MAX_HAND_SIZE);
+}
+
+export function resolveHandLimitDiscard(cardIds = []) {
+  const pending = getPendingHandLimitDiscard();
+  if (!pending || gameState.winner !== null) return false;
+  const player = gameState.players[pending.playerIndex];
+  if (!player) return false;
+  if (!Array.isArray(cardIds) || cardIds.length !== pending.discardCount) return false;
+  const uniqueIds = new Set(cardIds);
+  if (uniqueIds.size !== cardIds.length) return false;
+  if (!cardIds.every((id) => player.hand.some((card) => card.id === id))) return false;
+
+  createUndoPoint();
+  cardIds.forEach((id) => discardCardFromHand(player, id, true));
+  logAction(gameState, `${player.name} défausse ${cardIds.length} carte(s) pour respecter la limite de main.`, 'sys');
+  gameState.pendingHandLimitDiscard = null;
+  finishEndTurnAfterHandLimit(player);
+  persistGameState();
+  return true;
+}
+
+export function autoDiscardForHandLimit(player) {
+  if (!needsHandLimitDiscard(player)) return [];
+  const count = player.hand.length - MAX_HAND_SIZE;
+  const cardIds = chooseAutomaticHandLimitDiscards(player, count).map((card) => card.id);
+  cardIds.forEach((id) => discardCardFromHand(player, id, true));
+  logAction(gameState, `${player.name} défausse ${cardIds.length} carte(s) pour respecter la limite de main.`, 'sys');
+  return cardIds;
 }
 
 export function resolvePendingDeckEffect(choice = {}) {
@@ -447,6 +487,7 @@ export function handleDeckExhaustion(player) {
 export function validateUpdatePhase() {
   if (gameState.phase !== PHASES.UPDATE) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = getCurrentPlayer();
   const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
   if (pending.length > 0) return false;
@@ -476,6 +517,7 @@ function advanceAfterUpdatePhase() {
 export function updateFunction(functionId, extra = false, options = {}) {
   if (gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = getCurrentPlayer();
   const func = player.active.find((item) => item.id === functionId);
   if (!func || func.broken) return false;
@@ -783,6 +825,31 @@ function discardCardFromHand(player, cardId, silent = false) {
   if (!silent) logAction(gameState, `${player.name} défausse ${card.name}.`, 'sys');
 }
 
+function chooseAutomaticHandLimitDiscards(player, count) {
+  const opponent = gameState.players.find((item) => item.index !== player.index);
+  const brokenCount = player.active.filter((fn) => fn.broken).length;
+  const activeSlots = Math.max(0, 3 - player.active.length);
+  const opponentHasActive = opponent?.active.some((fn) => !fn.broken);
+  const duplicateCounts = new Map();
+  player.hand.forEach((card) => duplicateCounts.set(card.key, (duplicateCounts.get(card.key) || 0) + 1));
+
+  return [...player.hand]
+    .sort((a, b) => discardPriority(a) - discardPriority(b))
+    .slice(0, count);
+
+  function discardPriority(card) {
+    let score = 50;
+    if (card.type === 'Fonction') score += activeSlots > 0 ? 25 : -10;
+    if (card.key === 'hotfix' || card.key === 'collecte') score += brokenCount > 0 ? 30 : -8;
+    if (['stack_spike', 'injection', 'pollution'].includes(card.key)) score += opponentHasActive ? 18 : -10;
+    if (card.type === 'Hardware' && player.hardware.length >= 2) score -= 16;
+    if ((duplicateCounts.get(card.key) || 0) > 1) score -= 8;
+    if (card.cost > player.memFree + 2) score -= 12;
+    if (card.key === 'swap') score -= 5;
+    return score;
+  }
+}
+
 function discardFunction(player, func) {
   player.discard.push({ key: func.cardKey, name: func.name, type: 'Fonction' });
 }
@@ -824,6 +891,7 @@ function breakFunction(player, func, reason) {
 export function canUseOverclock(functionId) {
   if (!gameState || gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = getCurrentPlayer();
   if (!hasHardware(player, 'overclock') || player.overclockUsed) return false;
   if (player.overclockSkipped) return false;
@@ -853,6 +921,7 @@ export function useOverclock(functionId) {
 export function canSkipOverclock() {
   if (!gameState || gameState.phase !== PHASES.UPDATE || gameState.winner !== null) return false;
   if (gameState.pendingDeckEffect) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = getCurrentPlayer();
   const pending = player.active.filter((fn) => !fn.broken && !player.updatedThisTurn.includes(fn.id));
   return pending.length === 0 && mustChooseOverclock(player);
@@ -870,6 +939,7 @@ export function skipOverclock() {
 
 export function rebootCurrentPlayer() {
   if (!canRebootCurrentPlayer()) return false;
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = getCurrentPlayer();
   createUndoPoint();
   rebootPlayer(player, false);
@@ -922,6 +992,7 @@ function shuffleInPlace(array) {
 
 export function endTurn() {
   if (gameState.phase !== PHASES.ACTION || gameState.winner !== null) return false;
+  if (gameState.pendingDeckEffect || gameState.pendingHandLimitDiscard) return false;
   createUndoPoint();
   const player = getCurrentPlayer();
   if (player.tempMemory > 0) {
@@ -946,14 +1017,33 @@ export function endTurn() {
   player.turnActionsTaken = false;
   player.completedThisTurn = false;
   clampMemory(player);
-  gameState.currentPlayerIndex = 1 - gameState.currentPlayerIndex;
-  if (gameState.currentPlayerIndex === 0) gameState.turn += 1;
-  beginTurn();
+  if (needsHandLimitDiscard(player)) {
+    if (player.isBot) {
+      autoDiscardForHandLimit(player);
+    } else {
+      gameState.pendingHandLimitDiscard = {
+        playerIndex: player.index,
+        maxHandSize: MAX_HAND_SIZE,
+        discardCount: player.hand.length - MAX_HAND_SIZE
+      };
+      logAction(gameState, `${player.name} doit défausser ${gameState.pendingHandLimitDiscard.discardCount} carte(s) pour respecter la limite de main.`, 'warn');
+      persistGameState();
+      return true;
+    }
+  }
+  finishEndTurnAfterHandLimit(player);
   persistGameState();
   return true;
 }
 
+function finishEndTurnAfterHandLimit(player) {
+  gameState.currentPlayerIndex = 1 - gameState.currentPlayerIndex;
+  if (gameState.currentPlayerIndex === 0) gameState.turn += 1;
+  beginTurn();
+}
+
 export function playCard(playerIndex, cardId, targetData = {}) {
+  if (gameState.pendingHandLimitDiscard) return false;
   const player = gameState.players[playerIndex];
   if (!player || gameState.winner !== null || player.rebootedThisTurn) {
     return false;

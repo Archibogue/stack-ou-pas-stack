@@ -61,6 +61,7 @@
 <li><strong>Condition de victoire</strong> : 11 points ou plus.</li>
 <li><strong>Condition qualitative</strong> : au moins 3 fonctions terminées, avec au moins 2 noms de fonctions différents.</li>
 <li><strong>Limite de pile</strong> : une fonction casse si elle devrait recevoir un 7e cadre.</li>
+<li><strong>Limite de main</strong> : 8 cartes, vérifiée uniquement à la fin du tour.</li>
 <li><strong>Bonus de récursion</strong> : <code>B(R)=R²</code>.</li>
 <li><strong>Decks</strong> : deux decks d’initiation symétriques de 26 cartes.</li>
 </ul>
@@ -83,10 +84,14 @@
 <li><strong>Phase de mise à jour</strong> : toutes les fonctions actives non cassées du joueur actif sont mises à jour, dans l’ordre choisi par ce joueur.</li>
 <li><strong>Phase de pioche</strong> : le joueur pioche 1 carte dans la pile Système.</li>
 <li><strong>Phase de conception</strong> : le joueur peut jouer des Fonctions, Commandes et Hardware.</li>
-<li><strong>Fin de tour</strong> : les effets temporaires cessent.</li>
+<li><strong>Fin de tour</strong> : les effets temporaires cessent, puis la limite de main est vérifiée.</li>
 </ol>
 <p>Aucune carte ne peut être jouée avant la phase de conception, sauf les Interrupts. Une Interrupt peut être jouée pendant le tour adverse quand sa condition de réaction est explicitement remplie et qu’une cible légale existe.</p>
 <p>La phase de pioche ne permet pas de tirer une nouvelle Fonction. Une Fonction est piochée automatiquement uniquement quand le joueur vient d’en terminer une, ou pendant un reboot qui redonne une main de départ.</p>
+<h2>Limite de main</h2>
+<p>Un joueur peut avoir autant de cartes qu’il veut pendant son tour.</p>
+<p>À la fin de son tour, s’il a plus de 8 cartes en main, il doit défausser des cartes de son choix jusqu’à n’en garder que 8.</p>
+<p>Les cartes défaussées ainsi vont dans sa défausse normale.</p>
 <h2>Fonctionnement des fonctions</h2>
 <p>Quand une fonction est lancée, son contrôleur choisit sa profondeur <code>R</code> si la carte indique « Empiler jusqu’à X ». Pour une carte « Empiler X », <code>R=X</code>.</p>
 <p>La fonction place d’abord son cadre initial <code>[R]</code>. À chaque phase de mise à jour :</p>
