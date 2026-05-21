@@ -34,7 +34,10 @@ export function createPlayer(name, index) {
     tempMemory: 0,
     rebootedThisTurn: false,
     turnActionsTaken: false,
-    completedThisTurn: false
+    completedThisTurn: false,
+    botReactionsThisTurn: 0,
+    botLastReactionLogSequence: 0,
+    botReactionLockSequence: 0
   };
 }
 
@@ -52,6 +55,7 @@ export function createGameState(player1Name = 'Joueur Cyan', player2Name = 'Joue
     firstTurn: true,
     soloMode: false,
     botIndex: null,
+    botProfile: 'equilibre',
     remoteCode: null,
     isRemote: false,
     apiAvailable: false
@@ -112,6 +116,7 @@ export function restoreState(data) {
   state.pendingDeckEffect = state.pendingDeckEffect || null;
   state.soloMode = Boolean(state.soloMode);
   state.botIndex = Number.isInteger(state.botIndex) ? state.botIndex : null;
+  state.botProfile = ['pedagogique', 'equilibre', 'agressif'].includes(state.botProfile) ? state.botProfile : 'equilibre';
   state.players?.forEach((player) => {
     player.isBot = Boolean(player.isBot);
     player.updatedThisTurn = player.updatedThisTurn || [];
@@ -123,6 +128,9 @@ export function restoreState(data) {
     player.rebootedThisTurn = Boolean(player.rebootedThisTurn);
     player.turnActionsTaken = Boolean(player.turnActionsTaken);
     player.completedThisTurn = Boolean(player.completedThisTurn);
+    player.botReactionsThisTurn = Number.isInteger(player.botReactionsThisTurn) ? player.botReactionsThisTurn : 0;
+    player.botLastReactionLogSequence = Number.isInteger(player.botLastReactionLogSequence) ? player.botLastReactionLogSequence : 0;
+    player.botReactionLockSequence = Number.isInteger(player.botReactionLockSequence) ? player.botReactionLockSequence : 0;
   });
   return state;
 }

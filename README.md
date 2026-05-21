@@ -51,7 +51,7 @@ Dossier : [`internet/`](internet/)
 Cette partie contient une version jouable en navigateur.
 
 - V1/V1.1 reste disponible dans `internet/index.html` comme version historique jouable en fichier HTML autonome.
-- V2 est disponible dans `internet/v2/public/index.html` : version recommandée pour test web, avec architecture séparée, moteur centralisé, sauvegarde locale et API PHP/MySQL optionnelle.
+- V2 est disponible dans `internet/v2/public/index.html` : version recommandée pour test web, avec architecture séparée, moteur centralisé, mode solo contre l'ordi, sauvegarde locale et API PHP/MySQL optionnelle.
 
 La règle d’ordre obligatoire d’un tour, utilisée par la version physique active et reprise par la V2, est :
 

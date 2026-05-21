@@ -1,5 +1,15 @@
 # Changelog V2
 
+## V2 solo RC
+
+- Ajout du mode solo local contre l'ordinateur.
+- Bot progressif via `runBotStep()` avec délai perceptible entre les actions.
+- Profils `pedagogique`, `equilibre` et `agressif`.
+- Décisions du bot expliquées dans le journal.
+- Garde-fous anti-boucles, blocage correct sur les décisions humaines et résolution automatique des effets du bot.
+- Tests renforcés pour le solo, les réactions, l'import/export et les tours complets du bot.
+- Affichage plus lisible des actions en cours avec badge de réflexion et message temporaire non bloquant.
+
 ## 0.2.2 — Préparation au partage bêta
 
 - Clarification du caractère optionnel et pédagogique de l’API PHP/MySQL dans la documentation V2.

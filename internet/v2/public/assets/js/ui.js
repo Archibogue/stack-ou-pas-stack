@@ -1,10 +1,12 @@
 import { PHASES } from './rules.js';
 import { getState, newGame, loadGame, saveGame, exportGame, importGame, drawForPlayer, getDeckTopCards, moveTopDeckCardToBottom, getPendingDeckEffect, resolvePendingDeckEffect, validateUpdatePhase, updateFunction, playCard, canPlayCard, canEndTurn, endTurn, setApiAvailability, setRemoteCode, persistGameState, loadDemoScenario, getPlayerUsedMemory, canUseOverclock, useOverclock, rebootCurrentPlayer, canRebootCurrentPlayer, getFunctionEffectSummary, getNextFunctionEffect, canUndo, undoLastAction } from './game-engine.js';
-import { maybeReactToHumanAction, runBotTurn, startSoloGame } from './bot.js';
+import { getBotProfileLabel, maybeReactToHumanAction, runBotStep, startSoloGame } from './bot.js';
 import { detectApi, createRemoteGame, joinRemoteGame, loadRemoteGame, loadLocalState, saveRemoteSeat, loadRemoteSeat } from './storage.js';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
+const BOT_STEP_DELAY_MS = 800;
+const ACTION_TOAST_MS = 1900;
 let apiAvailable = false;
 let remotePollTimer = null;
 let remotePollInFlight = false;
@@ -15,6 +17,10 @@ let lastCounterSnapshot = null;
 let counterDeltas = new Map();
 let openPendingDeckEffectId = null;
 let botThinking = false;
+let botStepCount = 0;
+let botStepTimer = null;
+let botPausedSignature = null;
+let actionToastTimer = null;
 
 const PHASE_STEPS = [
   { key: PHASES.UPDATE, label: 'Mise à jour' },
@@ -417,8 +423,10 @@ function promptNewGame() {
 function startSoloLocalGame() {
   stopRemotePolling();
   const name = prompt('Nom du joueur humain ?', 'Joueur Cyan')?.trim() || 'Joueur Cyan';
+  const profileAnswer = prompt('Niveau du bot ? pedagogique, equilibre ou agressif', 'equilibre')?.trim().toLowerCase();
+  const botProfile = normalizeBotProfileInput(profileAnswer);
   resetCounterAnimations();
-  startSoloGame(name, 'Ordinateur');
+  startSoloGame(name, 'Ordinateur', { botProfile });
   renderGameScreen();
 }
 
@@ -538,6 +546,7 @@ function renderGameScreen() {
   const headerStatus = state.winner !== null
     ? 'Partie terminée'
     : `Joueur actif : ${currentPlayer.name}${currentPlayer.isBot ? ' (ordinateur)' : ''}${remoteInfo ? ` - ${remoteInfo}` : ''}`;
+  const botStatus = state.soloMode ? renderBotStatus(state) : null;
   const headerActions = remoteMode
     ? [
       createElement('button', { onclick: () => showHomeScreen() }, ['Accueil']),
@@ -557,6 +566,7 @@ function renderGameScreen() {
       createElement('span', { className: 'eyebrow', textContent: `Tour ${state.turn}` }),
       createElement('h1', { textContent: 'Stack ou pas Stack — V2' }),
       createElement('p', { textContent: headerStatus }),
+      botStatus,
       renderPhaseRail(state)
     ]),
     createElement('div', { className: 'header-actions' }, headerActions)
@@ -583,26 +593,142 @@ function scheduleBotTurn() {
   if (!state?.soloMode || state.winner !== null || isRemoteState(state)) return;
   const current = state.players[state.currentPlayerIndex];
   if (!current?.isBot || botThinking) return;
+  if (botPausedSignature === botProgressSignature(state)) return;
+  if (isHumanModalOpen()) return;
+  const effect = getPendingDeckEffect();
+  if (effect && effect.ownerIndex !== current.index) return;
   botThinking = true;
-  window.setTimeout(() => {
+  botStepCount = 0;
+  renderGameScreen();
+  queueBotStep(current.index);
+}
+
+function queueBotStep(botIndex) {
+  if (botStepTimer) window.clearTimeout(botStepTimer);
+  botStepTimer = window.setTimeout(() => {
+    let queuedNextStep = false;
     try {
-      runBotTurn(current.index);
-    } finally {
-      botThinking = false;
+      const state = getState();
+      if (!state?.soloMode || state.winner !== null || state.currentPlayerIndex !== botIndex || isRemoteState(state)) {
+        botThinking = false;
+        renderGameScreen();
+        return;
+      }
+      if (isHumanModalOpen()) {
+        botThinking = false;
+        return;
+      }
+      const effect = getPendingDeckEffect();
+      if (effect && effect.ownerIndex !== botIndex) {
+        botThinking = false;
+        renderGameScreen();
+        return;
+      }
+      botStepCount += 1;
+      const beforeSequence = state.logSequence || 0;
+      const changed = runBotStep(botIndex);
+      if (!changed) botPausedSignature = botProgressSignature(getState());
+      else botPausedSignature = null;
+      if (changed) showActionToast(actionLabelFromLogs(beforeSequence, 'Ordinateur agit.'), { actor: 'bot' });
       renderGameScreen();
+      const next = getState();
+      if (next?.winner === null && next.currentPlayerIndex === botIndex && botStepCount < 80) {
+        queuedNextStep = true;
+        queueBotStep(botIndex);
+        return;
+      }
+      if (next?.winner === null && next.currentPlayerIndex === botIndex && botStepCount >= 80) {
+        botPausedSignature = botProgressSignature(next);
+      }
+    } finally {
+      if (!queuedNextStep) {
+        botThinking = false;
+        renderGameScreen();
+      }
     }
-  }, 520);
+  }, getBotStepDelay());
 }
 
 function triggerBotReaction() {
   const state = getState();
   if (!state?.soloMode || botThinking || isRemoteState(state)) return false;
+  if (isHumanModalOpen()) return false;
+  const beforeSequence = state.logSequence || 0;
   const changed = maybeReactToHumanAction(state.botIndex);
   if (changed) {
     renderGameScreen();
+    showActionToast(actionLabelFromLogs(beforeSequence, 'Ordinateur joue une interruption.'), { actor: 'bot', tone: 'bad' });
     spawnArcadeEffect('hit', 'INT');
   }
   return changed;
+}
+
+function renderBotStatus(state) {
+  const label = getBotProfileLabel(state.botProfile);
+  const thinking = botThinking && state.players[state.currentPlayerIndex]?.isBot;
+  return createElement('div', { className: `bot-status${thinking ? ' thinking' : ''}`, role: 'status' }, [
+    createElement('span', { textContent: `Bot : ${label}` }),
+    thinking ? createElement('strong', { textContent: 'L’ordinateur réfléchit...' }) : null
+  ]);
+}
+
+function isHumanModalOpen() {
+  return modal && !modal.classList.contains('hidden');
+}
+
+function normalizeBotProfileInput(value) {
+  const normalized = String(value || 'equilibre')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (normalized === 'pedagogique') return 'pedagogique';
+  if (normalized === 'agressif') return 'agressif';
+  return 'equilibre';
+}
+
+function getBotStepDelay() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ? Math.max(700, BOT_STEP_DELAY_MS - 100)
+    : BOT_STEP_DELAY_MS;
+}
+
+function botProgressSignature(state) {
+  if (!state) return '';
+  return JSON.stringify({
+    turn: state.turn,
+    currentPlayerIndex: state.currentPlayerIndex,
+    phase: state.phase,
+    logSequence: state.logSequence || 0,
+    pendingDeckEffectId: state.pendingDeckEffect?.id || null
+  });
+}
+
+function showActionToast(label, options = {}) {
+  const text = String(label || '').trim();
+  if (!text) return;
+  let toast = document.getElementById('action-toast');
+  if (!toast) {
+    toast = createElement('div', { id: 'action-toast', className: 'action-toast', role: 'status', 'aria-live': 'polite' });
+    document.body.appendChild(toast);
+  }
+  const actor = options.actor === 'bot' ? 'bot' : 'human';
+  const tone = ['good', 'warn', 'bad'].includes(options.tone) ? ` ${options.tone}` : '';
+  toast.className = `action-toast ${actor}${tone} visible`;
+  toast.textContent = text;
+  if (actionToastTimer) window.clearTimeout(actionToastTimer);
+  actionToastTimer = window.setTimeout(() => {
+    toast.classList.remove('visible');
+  }, ACTION_TOAST_MS);
+}
+
+function actionLabelFromLogs(beforeSequence, fallback = 'Action enregistrée.') {
+  const state = getState();
+  const entries = (state?.log || []).filter((entry) => (entry.order || 0) > beforeSequence);
+  const explained = [...entries].reverse().find((entry) => /^Ordinateur /.test(entry.text || ''));
+  if (explained) return explained.text;
+  const played = [...entries].reverse().find((entry) => entry.event === 'card_played');
+  if (played) return played.text.replace(' : début de résolution.', '.');
+  const meaningful = [...entries].reverse().find((entry) => entry.cls !== 'sys') || entries[entries.length - 1];
+  return meaningful?.text || fallback;
 }
 
 function renderRemoteBoard(state) {
@@ -1138,9 +1264,11 @@ function renderCenterPanel(state) {
   buttons.push(createElement('button', {
     className: 'primary',
     onclick: () => {
+      const beforeSequence = getState().logSequence || 0;
       const changed = validateUpdatePhase();
       noteRemoteLocalAction(changed);
       renderGameScreen();
+      if (changed) showActionToast(actionLabelFromLogs(beforeSequence, `${currentPlayer.name} valide la mise à jour.`), { actor: 'human' });
       if (changed) triggerBotReaction();
       if (changed) spawnArcadeEffect('draw', 'NEXT');
     },
@@ -1157,9 +1285,11 @@ function renderCenterPanel(state) {
   buttons.push(createElement('button', {
     className: 'warn',
     onclick: () => {
+      const beforeSequence = getState().logSequence || 0;
       const ended = endTurn();
       noteRemoteLocalAction(ended);
       renderGameScreen();
+      if (ended) showActionToast(actionLabelFromLogs(beforeSequence, `${currentPlayer.name} termine son tour.`), { actor: 'human', tone: 'warn' });
       if (ended) triggerBotReaction();
       if (ended) spawnArcadeEffect('draw', 'TURN');
     },
@@ -1169,9 +1299,11 @@ function renderCenterPanel(state) {
   buttons.push(createElement('button', {
     className: 'bad',
     onclick: () => {
+      const beforeSequence = getState().logSequence || 0;
       const rebooted = rebootCurrentPlayer();
       noteRemoteLocalAction(rebooted);
       renderGameScreen();
+      if (rebooted) showActionToast(actionLabelFromLogs(beforeSequence, `${currentPlayer.name} lance un reboot volontaire.`), { actor: 'human', tone: 'warn' });
       if (rebooted) triggerBotReaction();
       if (rebooted) spawnArcadeEffect('reboot', 'REBOOT');
     },
@@ -1285,9 +1417,11 @@ function previewPhaseDraw() {
   if (!canControlCurrentTurn(state) || state.phase !== PHASES.DRAW || state.winner !== null) return;
   const top = getDeckTopCards(player.index, 'system', 1)[0];
   if (!top) {
+    const beforeSequence = state.logSequence || 0;
     const card = drawForPlayer('system');
     noteRemoteLocalAction(true);
     renderGameScreen();
+    showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} pioche une carte Système.`), { actor: 'human' });
     triggerBotReaction();
     if (card) spawnArcadeEffect('draw', 'DRAW');
     return;
@@ -1322,9 +1456,11 @@ function showCardDecisionModal({ title, player, deckType, cards, allowTake, allo
     actions.push({
       label: 'Mettre au-dessous',
       onClick: () => {
+        const beforeSequence = getState().logSequence || 0;
         const changed = moveTopDeckCardToBottom(player.index, deckType);
         noteRemoteLocalAction(changed);
         renderGameScreen();
+        if (changed) showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} place une carte sous la pioche.`), { actor: 'human' });
       }
     });
   }
@@ -1332,9 +1468,11 @@ function showCardDecisionModal({ title, player, deckType, cards, allowTake, allo
     actions.push({
       label: takeLabel,
       onClick: () => {
+        const beforeSequence = getState().logSequence || 0;
         const card = drawForPlayer(deckType);
         noteRemoteLocalAction(true);
         renderGameScreen();
+        showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} pioche une carte Système.`), { actor: 'human' });
         triggerBotReaction();
         if (card) spawnArcadeEffect('draw', 'DRAW');
       }
@@ -1363,9 +1501,11 @@ function applyUpdate(functionId) {
   const beforeTop = before?.frames[before.frames.length - 1];
   const beforeCardKey = before?.cardKey;
   const wasUnwinding = Boolean(before?.reachedZero);
+  const beforeSequence = state.logSequence || 0;
   const updated = updateFunction(functionId);
   noteRemoteLocalAction(updated);
   renderGameScreen();
+  if (updated) showActionToast(`${beforeOwner.name} met à jour ${before.name}.`, { actor: 'human' });
   if (updated) triggerBotReaction();
   if (!updated || !beforeOwner || !before) return;
   const afterOwner = getState().players.find((player) => player.index === beforeOwner.index);
@@ -1440,6 +1580,7 @@ function showPendingDeckResolution(effect, targetPlayerIndex, deckType) {
   const cards = getDeckTopCards(targetPlayerIndex, deckType, current.count);
   const buttons = [];
   const resolveChoice = (choice) => {
+    const beforeSequence = getState().logSequence || 0;
     const resolved = resolvePendingDeckEffect({
       targetPlayerIndex,
       deckType,
@@ -1449,6 +1590,7 @@ function showPendingDeckResolution(effect, targetPlayerIndex, deckType) {
     noteRemoteLocalAction(resolved);
     hideModal();
     renderGameScreen();
+    if (resolved) showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} résout un effet de pioche.`), { actor: 'human' });
     if (resolved) triggerBotReaction();
     if (resolved && current.mode === 'reveal_take') spawnArcadeEffect('draw', 'TAKE');
   };
@@ -1488,16 +1630,20 @@ function applyOverclock(functionId) {
   const state = getState();
   const owner = state.players.find((player) => player.active.some((fn) => fn.id === functionId));
   if (!owner || !canControlPlayer(owner.index)) return;
+  const beforeSequence = state.logSequence || 0;
   const used = useOverclock(functionId);
   noteRemoteLocalAction(used);
   renderGameScreen();
+  if (used) showActionToast(actionLabelFromLogs(beforeSequence, `${owner.name} active Overclocking.`), { actor: 'human', tone: 'good' });
   if (used) triggerBotReaction();
   if (used) spawnArcadeEffect('overclock', '2X');
 }
 
 async function playCardAction(playerIndex, cardId) {
   if (!canControlPlayer(playerIndex)) return;
-  const card = getState().players[playerIndex].hand.find((c) => c.id === cardId);
+  const state = getState();
+  const player = state.players[playerIndex];
+  const card = player.hand.find((c) => c.id === cardId);
   if (!card) return;
   const targetData = {};
   if (card.type === 'Fonction' && card.mode !== undefined && card.mode !== 'fixe') {
@@ -1510,9 +1656,14 @@ async function playCardAction(playerIndex, cardId) {
     if (!selected) return;
     targetData.functionId = selected;
   }
+  const beforeSequence = getState().logSequence || 0;
   const played = playCard(playerIndex, cardId, targetData);
   noteRemoteLocalAction(played);
   renderGameScreen();
+  if (played) showActionToast(actionLabelFromLogs(beforeSequence, `${player.name} joue ${card.name}.`), {
+    actor: player.isBot ? 'bot' : 'human',
+    tone: card.type === 'Interrupt' ? 'bad' : ''
+  });
   if (played) triggerBotReaction();
   if (played) spawnCardEffect(card);
 }

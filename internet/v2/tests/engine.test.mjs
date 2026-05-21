@@ -22,6 +22,7 @@ const repoRoot = resolve(here, '../../..');
 
 const engine = await import('../public/assets/js/game-engine.js');
 const bot = await import('../public/assets/js/bot.js');
+const gameState = await import('../public/assets/js/game-state.js');
 const { CARD_DEFINITIONS, DECK_COMPOSITION, createCard, buildDecks } = await import('../public/assets/js/cards.js');
 const rules = await import('../public/assets/js/rules.js');
 
@@ -70,9 +71,10 @@ function assertInitialSetup() {
 }
 
 function assertSoloSetup() {
-  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'pedagogique' });
   assert.equal(state.soloMode, true);
   assert.equal(state.botIndex, 1);
+  assert.equal(state.botProfile, 'pedagogique');
   assert.equal(state.players[0].isBot, false);
   assert.equal(state.players[1].isBot, true);
 
@@ -90,6 +92,22 @@ function assertSoloSetup() {
   })));
   assert.equal(restored.players[0].isBot, false, 'Old saves without isBot remain human by default');
   assert.equal(restored.soloMode, false, 'Old saves without soloMode remain normal local games');
+  assert.equal(restored.botProfile, 'equilibre', 'Old saves without botProfile use the balanced bot');
+}
+
+function assertRunBotStepIsAtomic() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  state.firstTurn = false;
+  computer.active = [];
+  computer.hand = [];
+  computer.systemDeck = [createCard('swap')];
+
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(state.phase, rules.PHASES.DRAW, 'One bot step validates update but does not also draw');
+  assert.equal(computer.systemDeck.length, 1);
 }
 
 function assertBotCanPassTurnCycle() {
@@ -140,10 +158,233 @@ function assertBotStackSpikeReaction() {
   computer.hand = [createCard('stack_spike')];
   computer.memFree = computer.memTotal;
   state.phase = rules.PHASES.UPDATE;
+  engine.logAction(state, 'Action humaine de test.', 'sys', { player: human.name, actorIndex: 0 });
 
   assert.equal(bot.maybeReactToHumanAction(1), true);
   assert.equal(computer.discard.some((card) => card.key === 'stack_spike'), true);
   assert.equal(target.frames.filter((frame) => frame === 'P').length, 2);
+}
+
+function makeFunction(key, R, frames, overrides = {}) {
+  const card = CARD_DEFINITIONS[key];
+  return {
+    id: `${key}-${Math.random().toString(36).slice(2)}`,
+    cardKey: key,
+    key,
+    name: card.name,
+    cost: card.cost,
+    value: card.value,
+    R,
+    frames,
+    nextValue: overrides.nextValue ?? (frames.includes(0) ? -1 : 0),
+    reachedZero: overrides.reachedZero ?? frames.includes(0),
+    broken: Boolean(overrides.broken),
+    memUsed: overrides.memUsed ?? card.cost + frames.slice(1).filter((frame) => frame !== 'P').length
+  };
+}
+
+function assertBotProfilesAffectDepthAndTargets() {
+  let state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'pedagogique' });
+  let computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.hand = [createCard('expansion')];
+  computer.active = [];
+  computer.memFree = computer.memTotal;
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(computer.active[0].R <= 2, true, 'Pedagogic bot chooses a cautious depth');
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  const human = state.players[0];
+  computer = state.players[1];
+  const nearScore = makeFunction('tri_fusion', 4, [4, 3, 2, 1, 0], { reachedZero: true, nextValue: -1, memUsed: 7 });
+  const smaller = makeFunction('sentinelle', 1, [1, 0, 'P', 'P'], { reachedZero: true, nextValue: -1, memUsed: 3 });
+  human.active = [smaller, nearScore];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.hand = [createCard('stack_spike')];
+  computer.memFree = computer.memTotal;
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(nearScore.broken, true, 'Aggressive bot targets the high-value vulnerable function first');
+  assert.equal(smaller.broken, false);
+}
+
+function assertBotVoluntaryReboot() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  computer.active = [makeFunction('quicksort', 3, [3, 2, 1, 0, 'P', 'P'], { broken: true, reachedZero: true, memUsed: 6 })];
+  computer.hand = [createCard('swap')];
+  computer.memFree = 1;
+
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(computer.active.length, 0, 'Bot can choose a voluntary reboot when memory is blocked');
+  assert.equal(computer.rebootedThisTurn, true);
+  assert.ok(state.log.some((entry) => entry.text.includes('reboot volontaire')));
+}
+
+function assertBotReactionGuards() {
+  let state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  let human = state.players[0];
+  let computer = state.players[1];
+  human.active = [makeFunction('tri_fusion', 4, [4, 3, 2, 1, 0], { reachedZero: true, nextValue: -1, memUsed: 7 })];
+  computer.hand = [createCard('stack_spike')];
+  computer.memFree = 2;
+  state.phase = rules.PHASES.UPDATE;
+  engine.logAction(state, 'Action humaine de test.', 'sys', { player: human.name, actorIndex: 0 });
+  assert.equal(bot.maybeReactToHumanAction(1), false, 'Bot cannot react without enough memory');
+  assert.equal(computer.hand.some((card) => card.key === 'stack_spike'), true);
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  human = state.players[0];
+  computer = state.players[1];
+  human.active = [makeFunction('tri_fusion', 3, [3, 2, 1], { reachedZero: false, nextValue: 0, memUsed: 5 })];
+  computer.hand = [createCard('stack_spike')];
+  computer.memFree = computer.memTotal;
+  state.phase = rules.PHASES.UPDATE;
+  engine.logAction(state, 'Action humaine de test.', 'sys', { player: human.name, actorIndex: 0 });
+  assert.equal(bot.maybeReactToHumanAction(1), false, 'Bot ignores illegal Stack Spike targets');
+  assert.equal(computer.discard.some((card) => card.key === 'stack_spike'), false);
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  human = state.players[0];
+  computer = state.players[1];
+  human.active = [
+    makeFunction('tri_fusion', 4, [4, 3, 2, 1], { reachedZero: false, nextValue: 0, memUsed: 6 }),
+    makeFunction('expansion', 4, [4, 3, 2, 1], { reachedZero: false, nextValue: 0, memUsed: 6 })
+  ];
+  computer.hand = [createCard('stack_spike'), createCard('injection')];
+  computer.memFree = computer.memTotal;
+  state.phase = rules.PHASES.UPDATE;
+  engine.logAction(state, 'Action humaine de test.', 'sys', { player: human.name, actorIndex: 0 });
+  assert.equal(bot.maybeReactToHumanAction(1), true);
+  assert.equal(bot.maybeReactToHumanAction(1), false, 'Bot plays at most one reaction for the same human action');
+  assert.equal(computer.botReactionsThisTurn, 1);
+
+  state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  human = state.players[0];
+  computer = state.players[1];
+  human.active = [makeFunction('tri_fusion', 4, [4, 3, 2, 1, 0], { reachedZero: true, nextValue: -1, memUsed: 7 })];
+  computer.hand = [createCard('stack_spike')];
+  computer.memFree = computer.memTotal;
+  state.phase = rules.PHASES.UPDATE;
+  state.log = [];
+  state.logSequence = 0;
+  engine.logAction(state, 'Action interne du bot.', 'sys', { player: computer.name, actorIndex: 1 });
+  assert.equal(bot.maybeReactToHumanAction(1), false, 'Bot does not react to its own action log');
+  assert.equal(computer.discard.some((card) => card.key === 'stack_spike'), false);
+
+  state.currentPlayerIndex = 1;
+  assert.equal(bot.maybeReactToHumanAction(1), false, 'Bot does not react during its own turn');
+}
+
+function assertBotPendingDeckEffects() {
+  let state = bot.startSoloGame('Ada', 'Ordinateur');
+  let computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  state.pendingDeckEffect = {
+    id: 'human-pending',
+    ownerIndex: 0,
+    sourceName: 'Effet humain',
+    mode: 'peek_top',
+    count: 1,
+    allowedPlayerIndexes: [0],
+    allowedDecks: ['system'],
+    afterResolve: null
+  };
+  const logBefore = state.logSequence;
+  assert.equal(bot.runBotStep(1), false, 'Human pending deck effect blocks bot step');
+  assert.equal(state.pendingDeckEffect.id, 'human-pending');
+  assert.equal(state.logSequence, logBefore, 'Blocked bot step does not spam the log');
+  assert.equal(bot.runBotTurn(1), false, 'Bot turn loop stops on a human pending deck effect');
+
+  state = bot.startSoloGame('Ada', 'Ordinateur');
+  computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  computer.systemDeck = [createCard('swap'), createCard('ram')];
+  state.pendingDeckEffect = {
+    id: 'bot-pending',
+    ownerIndex: 1,
+    sourceName: 'Effet bot',
+    mode: 'peek_top',
+    count: 1,
+    allowedPlayerIndexes: [1],
+    allowedDecks: ['system'],
+    afterResolve: null
+  };
+  assert.equal(bot.runBotStep(1), true, 'Bot resolves its own pending deck effect automatically');
+  assert.equal(state.pendingDeckEffect, null);
+}
+
+function assertSoloImportExportRoundTrip() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur', { botProfile: 'agressif' });
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.hand = [];
+  computer.active = [];
+  computer.botReactionsThisTurn = 1;
+  computer.botLastReactionLogSequence = 12;
+  computer.botReactionLockSequence = 13;
+
+  const saved = gameState.cloneStateForSave(state);
+  assert.equal(saved.soloMode, true);
+  assert.equal(saved.botIndex, 1);
+  assert.equal(saved.botProfile, 'agressif');
+  assert.equal(saved.players[1].isBot, true);
+  assert.equal(saved.players[1].botReactionsThisTurn, 1);
+
+  engine.importGame(JSON.stringify(saved));
+  const restored = engine.getState();
+  assert.equal(restored.soloMode, true);
+  assert.equal(restored.botIndex, 1);
+  assert.equal(restored.botProfile, 'agressif');
+  assert.equal(restored.players[1].isBot, true);
+  assert.equal(restored.currentPlayerIndex, 1);
+  assert.equal(bot.runBotStep(1), true, 'Imported solo game can resume the bot turn');
+  assert.equal(restored.currentPlayerIndex, 0);
+}
+
+function assertBotReactionCountersResetOnTurnChange() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.ACTION;
+  computer.hand = [];
+  computer.active = [];
+  computer.botReactionsThisTurn = 2;
+
+  assert.equal(bot.runBotStep(1), true);
+  assert.equal(state.currentPlayerIndex, 0);
+  assert.equal(computer.botReactionsThisTurn, 0, 'Reaction count resets when a new turn begins');
+}
+
+function assertCompleteBotTurnWithFunctionDrawActionEnd() {
+  const state = bot.startSoloGame('Ada', 'Ordinateur');
+  const computer = state.players[1];
+  state.currentPlayerIndex = 1;
+  state.phase = rules.PHASES.UPDATE;
+  state.firstTurn = false;
+  computer.active = [makeFunction('factorielle', 1, [1], { reachedZero: false, nextValue: 0, memUsed: 3 })];
+  computer.updatedThisTurn = [];
+  computer.hand = [createCard('sentinelle')];
+  computer.systemDeck = [createCard('swap')];
+  computer.memFree = 8;
+
+  assert.equal(bot.runBotStep(1), true, 'Bot updates a function');
+  assert.equal(computer.updatedThisTurn.length, 1);
+  assert.equal(bot.runBotStep(1), true, 'Bot validates update phase');
+  assert.equal(state.phase, rules.PHASES.DRAW);
+  assert.equal(bot.runBotStep(1), true, 'Bot draws during draw phase');
+  assert.equal(state.phase, rules.PHASES.ACTION);
+  assert.equal(bot.runBotStep(1), true, 'Bot plays one action');
+  assert.equal(computer.active.length, 2);
+  computer.hand = [];
+  assert.equal(bot.runBotStep(1), true, 'Bot ends turn when no useful action remains');
+  assert.equal(state.currentPlayerIndex, 0);
 }
 
 function assertDeckBuild() {
@@ -710,9 +951,17 @@ assertRulesConstants();
 assertFunctionDescriptionsUseRulePhases();
 assertInitialSetup();
 assertSoloSetup();
+assertRunBotStepIsAtomic();
 assertBotCanPassTurnCycle();
 assertBotDoesNotPlayIllegalMove();
 assertBotStackSpikeReaction();
+assertBotProfilesAffectDepthAndTargets();
+assertBotVoluntaryReboot();
+assertBotReactionGuards();
+assertBotPendingDeckEffects();
+assertSoloImportExportRoundTrip();
+assertBotReactionCountersResetOnTurnChange();
+assertCompleteBotTurnWithFunctionDrawActionEnd();
 assertDeckBuild();
 assertFunctionMemoryLifecycle();
 assertStructuredLog();

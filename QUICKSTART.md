@@ -27,6 +27,15 @@ http://127.0.0.1:8765/
 
 La V2 peut aussi fonctionner en partie locale avec sauvegarde navigateur et export/import JSON. L’API PHP/MySQL est optionnelle.
 
+### Tester la V2 solo
+
+1. Ouvrir `http://127.0.0.1:8765/` après avoir lancé `php -S`.
+2. Cliquer sur `Solo contre l'ordi`.
+3. Saisir le nom du joueur humain.
+4. Choisir un profil : `pedagogique`, `equilibre` ou `agressif`.
+5. Vérifier que le bot joue avec un délai visible, affiche `L'ordinateur réfléchit...`, résume ses actions par un message temporaire, et explique ses choix dans le journal.
+6. Tester `Exporter JSON`, puis `Importer JSON` pour reprendre la partie.
+
 Pour lancer les tests moteur :
 
 ```bash

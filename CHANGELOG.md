@@ -1,5 +1,15 @@
 # Changelog
 
+## V2 solo RC
+
+- Ajout du mode solo local contre l'ordinateur dans la V2 web.
+- Bot progressif avec délai visible entre les actions atomiques.
+- Profils de difficulté `pedagogique`, `equilibre` et `agressif`.
+- Décisions du bot journalisées pour rendre la partie plus pédagogique.
+- Garde-fous anti-boucles et meilleure gestion des effets de pioche en attente.
+- Tests moteur renforcés autour du solo, des réactions, de l'import/export et des tours bot.
+- Affichage plus lisible des actions en cours avec badge de réflexion et message temporaire.
+
 ## 0.2.2 — Préparation au partage bêta
 
 - Ajout d’une documentation de démarrage rapide.

@@ -107,6 +107,9 @@ export function startServerGame(state) {
 
 export function beginTurn() {
   const player = getCurrentPlayer();
+  gameState.players.forEach((item) => {
+    item.botReactionsThisTurn = 0;
+  });
   player.updatedThisTurn = [];
   player.planifierUsed = false;
   player.overclockTarget = null;
